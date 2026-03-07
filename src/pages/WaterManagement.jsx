@@ -54,7 +54,6 @@ const CustomTooltip = ({ active, payload, label }) => {
 export default function WaterManagement() {
   return (
     <div className="fade-in">
-      <div className="page-title">Water Management</div>
       <p className="page-subtitle">
         Soil moisture, precipitation tracking, and evapotranspiration analysis
       </p>

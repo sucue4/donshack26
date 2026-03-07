@@ -81,7 +81,6 @@ export default function AIAdvisor() {
 
   return (
     <div className="fade-in">
-      <div className="page-title">AI Agricultural Advisor</div>
       <p className="page-subtitle">
         AI-powered agronomist -- analyzes your field data and provides natural-language recommendations
       </p>

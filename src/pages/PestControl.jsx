@@ -58,7 +58,6 @@ const riskColor = (val) => val >= 60 ? 'var(--status-danger)' : val >= 35 ? 'var
 export default function PestControl() {
   return (
     <div className="fade-in">
-      <div className="page-title">Pest & Disease Control</div>
       <p className="page-subtitle">
         Integrated pest management -- scouting logs, disease risk modeling, and treatment thresholds
       </p>
