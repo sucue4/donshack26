@@ -14,13 +14,8 @@ const NAV_ITEMS = [
   { path: '/monoculture', label: 'Monoculture Risk' },
 ];
 
-export default function Sidebar({ currentPath, onNavigate }) {
+export default function Sidebar({ currentPath }) {
   const navigate = useNavigate();
-
-  const handleClick = (path) => {
-    onNavigate(path);
-    navigate(path);
-  };
 
   return (
     <aside className="sidebar">
@@ -39,7 +34,7 @@ export default function Sidebar({ currentPath, onNavigate }) {
             <button
               key={item.path}
               className={`nav-item${currentPath === item.path ? ' active' : ''}`}
-              onClick={() => handleClick(item.path)}
+              onClick={() => navigate(item.path)}
             >
               {item.label}
             </button>
