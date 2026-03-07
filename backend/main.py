@@ -87,11 +87,10 @@ async def service_status():
 
     # Check Earth Engine
     try:
-        from services.earth_engine import _check_gee_configured
-        _check_gee_configured()
-        results["satellite"] = {"status": "ok", "detail": "GEE configured"}
+        from services.earth_engine import deep_status_check
+        results["satellite"] = deep_status_check()
     except Exception as e:
-        results["satellite"] = {"status": "not_configured", "detail": str(e)}
+        results["satellite"] = {"status": "error", "message": str(e)}
 
     # Crops (local data, always available)
     results["crops"] = {"status": "ok", "detail": "Local database"}

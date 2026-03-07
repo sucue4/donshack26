@@ -266,7 +266,7 @@ export default function FieldMap() {
         Draw your farm boundaries on the satellite map -- shapes snap to 10m grid (Sentinel-2 resolution)
       </p>
 
-      {satStatus && satStatus.status !== 'configured' && (
+      {satStatus && satStatus.status !== 'ok' && (
         <div className="data-notice data-notice-error" style={{ marginBottom: 12 }}>
           Satellite/NDVI: {satStatus.message}
         </div>

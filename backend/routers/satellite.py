@@ -4,7 +4,7 @@ import logging
 from fastapi import APIRouter, Query, HTTPException
 from pydantic import BaseModel
 from typing import List, Optional
-from services.earth_engine import get_ndvi_composite, get_historical_ndvi, SatelliteServiceError
+from services.earth_engine import get_ndvi_composite, get_historical_ndvi, SatelliteServiceError, deep_status_check
 
 logger = logging.getLogger("ohdeere.satellite")
 router = APIRouter()
@@ -54,10 +54,5 @@ async def historical_ndvi(years: int = Query(3, description="Years of history"))
 
 @router.get("/status")
 async def satellite_status():
-    """Check if satellite services are properly configured."""
-    try:
-        from services.earth_engine import _check_gee_configured
-        _check_gee_configured()
-        return {"status": "configured", "message": "Google Earth Engine is configured"}
-    except SatelliteServiceError as e:
-        return {"status": "not_configured", "message": str(e)}
+    """Deep check — actually tries to initialize Earth Engine."""
+    return deep_status_check()

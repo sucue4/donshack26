@@ -9,6 +9,8 @@ from config import GEE_PROJECT_ID
 
 logger = logging.getLogger("ohdeere.services.earth_engine")
 
+_gee_initialized = False
+
 
 class SatelliteServiceError(Exception):
     """Raised when the Earth Engine service is unavailable."""
@@ -16,13 +18,12 @@ class SatelliteServiceError(Exception):
 
 
 def _check_gee_configured():
-    """Verify GEE is properly configured. Raises SatelliteServiceError if not."""
+    """Verify GEE config string is reasonable. Raises SatelliteServiceError if not."""
     if not GEE_PROJECT_ID:
         raise SatelliteServiceError(
-            "Google Earth Engine not configured. Set GEE_PROJECT_ID in .env with a valid GCP project ID "
-            "(not an OAuth client ID). Run 'earthengine authenticate' to set up credentials."
+            "Google Earth Engine not configured. Set GEE_PROJECT_ID in .env with a valid GCP project ID. "
+            "Then run 'earthengine authenticate' to set up credentials."
         )
-    # The current GEE_PROJECT_ID looks like an OAuth client ID, not a project ID
     if ".apps.googleusercontent.com" in GEE_PROJECT_ID:
         raise SatelliteServiceError(
             f"GEE_PROJECT_ID appears to be an OAuth client ID, not a GCP project ID. "
@@ -31,17 +32,61 @@ def _check_gee_configured():
         )
 
 
+def _init_gee():
+    """Actually initialize the Earth Engine SDK. Raises SatelliteServiceError on failure."""
+    global _gee_initialized
+    _check_gee_configured()
+
+    if _gee_initialized:
+        return
+
+    try:
+        import ee
+    except ImportError:
+        raise SatelliteServiceError(
+            "earthengine-api package not installed. Run: pip install earthengine-api"
+        )
+
+    try:
+        ee.Initialize(project=GEE_PROJECT_ID)
+        _gee_initialized = True
+        logger.info("Earth Engine initialized with project: %s", GEE_PROJECT_ID)
+    except Exception as e:
+        err_msg = str(e)
+        if "authorize" in err_msg.lower() or "authenticate" in err_msg.lower():
+            raise SatelliteServiceError(
+                "Earth Engine authentication required. Run 'earthengine authenticate' in your terminal, "
+                "then restart the backend."
+            )
+        elif "not registered" in err_msg.lower() or "not enabled" in err_msg.lower():
+            raise SatelliteServiceError(
+                f"Earth Engine API not enabled for project '{GEE_PROJECT_ID}'. "
+                f"Enable it at: https://console.cloud.google.com/apis/library/earthengine.googleapis.com?project={GEE_PROJECT_ID}"
+            )
+        else:
+            raise SatelliteServiceError(f"Earth Engine initialization failed: {err_msg}")
+
+
+def deep_status_check() -> dict:
+    """Perform a real GEE initialization check. Returns status dict."""
+    try:
+        _init_gee()
+        return {"status": "ok", "message": f"Earth Engine initialized (project: {GEE_PROJECT_ID})"}
+    except SatelliteServiceError as e:
+        return {"status": "not_configured", "message": str(e)}
+    except Exception as e:
+        return {"status": "error", "message": f"Unexpected error: {e}"}
+
+
 def get_ndvi_composite(field_geometry: dict, start_date: str, end_date: str) -> dict:
     """
     Compute NDVI composite for a field boundary.
-    Raises SatelliteServiceError if GEE is not configured.
+    Raises SatelliteServiceError if GEE is not configured or fails.
     """
-    _check_gee_configured()
+    _init_gee()
 
-    # If we get here, GEE_PROJECT_ID looks valid — attempt to use Earth Engine
     try:
         import ee
-        ee.Initialize(project=GEE_PROJECT_ID)
 
         coords = field_geometry.get("coordinates", [])
         region = ee.Geometry.Polygon(coords)
@@ -107,10 +152,6 @@ def get_ndvi_composite(field_geometry: dict, start_date: str, end_date: str) -> 
         }
     except SatelliteServiceError:
         raise
-    except ImportError:
-        raise SatelliteServiceError(
-            "earthengine-api package not installed. Run: pip install earthengine-api"
-        )
     except Exception as e:
         logger.error("Earth Engine NDVI computation failed: %s", e)
         raise SatelliteServiceError(f"Earth Engine error: {e}")
@@ -118,19 +159,50 @@ def get_ndvi_composite(field_geometry: dict, start_date: str, end_date: str) -> 
 
 def get_historical_ndvi(field_geometry: dict, years: int = 3) -> list:
     """Return historical NDVI monthly averages. Raises SatelliteServiceError if GEE is not configured."""
-    _check_gee_configured()
+    _init_gee()
 
     try:
         import ee
-        ee.Initialize(project=GEE_PROJECT_ID)
-        # Real implementation would compute monthly composites — for now raise clear error
-        raise SatelliteServiceError(
-            "Historical NDVI computation requires a valid GEE project and authenticated session. "
-            "Current configuration is incomplete."
+
+        coords = field_geometry.get("coordinates", [])
+        if not coords:
+            raise SatelliteServiceError("Field geometry has no coordinates.")
+
+        region = ee.Geometry.Polygon(coords)
+        import datetime
+        end = datetime.date.today()
+        start = end.replace(year=end.year - years)
+
+        collection = (
+            ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED")
+            .filterBounds(region)
+            .filterDate(start.isoformat(), end.isoformat())
+            .filter(ee.Filter.lt("CLOUDY_PIXEL_PERCENTAGE", 20))
         )
+
+        def add_ndvi(image):
+            ndvi = image.normalizedDifference(["B8", "B4"]).rename("NDVI")
+            return image.addBands(ndvi).set("month", image.date().get("month")).set("year", image.date().get("year"))
+
+        with_ndvi = collection.map(add_ndvi)
+        months = []
+        for y in range(start.year, end.year + 1):
+            for m in range(1, 13):
+                monthly = with_ndvi.filter(ee.Filter.calendarRange(y, y, "year")).filter(ee.Filter.calendarRange(m, m, "month"))
+                mean = monthly.select("NDVI").mean().reduceRegion(
+                    reducer=ee.Reducer.mean(), geometry=region, scale=10, maxPixels=1e8
+                )
+                months.append({"year": y, "month": m, "ndvi_mean": mean})
+
+        results = ee.List(
+            [ee.Dictionary({"year": m["year"], "month": m["month"], "ndvi_mean": m["ndvi_mean"]}) for m in months]
+        ).getInfo()
+
+        return [
+            {"year": r["year"], "month": r["month"], "ndvi_mean": round(r.get("ndvi_mean", {}).get("NDVI", 0) or 0, 4)}
+            for r in results
+        ]
     except SatelliteServiceError:
         raise
-    except ImportError:
-        raise SatelliteServiceError("earthengine-api package not installed.")
     except Exception as e:
         raise SatelliteServiceError(f"Earth Engine error: {e}")
