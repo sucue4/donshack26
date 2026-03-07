@@ -203,7 +203,7 @@ export default function FieldMap() {
     // Fetch NDVI data
     try {
       const ndviRes = await fetch('/api/satellite/ndvi?' + new URLSearchParams({
-        start_date: new Date(Date.now() - 30 * 86400000).toISOString().split('T')[0],
+        start_date: new Date(Date.now() - 90 * 86400000).toISOString().split('T')[0],
         end_date: new Date().toISOString().split('T')[0],
       }), {
         method: 'POST',

@@ -23,9 +23,15 @@ async def compute_ndvi(
 ):
     """Compute NDVI/NDRE/NDMI for a field boundary."""
     try:
+        # Frontend sends [lat, lon] (Leaflet), GEE needs [lon, lat] (GeoJSON)
+        gee_coords = [[lon, lat] for lat, lon in field.coordinates]
+        # Close the ring if not already closed
+        if gee_coords and gee_coords[0] != gee_coords[-1]:
+            gee_coords.append(gee_coords[0])
+
         geometry = {
             "type": "Polygon",
-            "coordinates": field.coordinates,
+            "coordinates": [gee_coords],
             "name": field.name,
         }
         data = get_ndvi_composite(geometry, start_date, end_date)
@@ -38,11 +44,18 @@ async def compute_ndvi(
         raise HTTPException(status_code=502, detail=f"Satellite service unavailable: {e}")
 
 
-@router.get("/historical-ndvi")
-async def historical_ndvi(years: int = Query(3, description="Years of history")):
+@router.post("/historical-ndvi")
+async def historical_ndvi(
+    field: FieldGeometry,
+    years: int = Query(3, description="Years of history"),
+):
     """Get historical NDVI seasonal pattern."""
     try:
-        data = get_historical_ndvi({}, years)
+        gee_coords = [[lon, lat] for lat, lon in field.coordinates]
+        if gee_coords and gee_coords[0] != gee_coords[-1]:
+            gee_coords.append(gee_coords[0])
+        geometry = {"type": "Polygon", "coordinates": [gee_coords]}
+        data = get_historical_ndvi(geometry, years)
         return data
     except SatelliteServiceError as e:
         logger.error("Historical NDVI failed: %s", e)
