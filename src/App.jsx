@@ -10,10 +10,9 @@ import CropPlanning from './pages/CropPlanning';
 import PestControl from './pages/PestControl';
 import Weather from './pages/Weather';
 import AIAdvisor from './pages/AIAdvisor';
-import Organization from './pages/Organization';
 
 const PAGE_TITLES = {
-  '/': 'Command Center',
+  '/': 'Dashboard',
   '/field-map': 'Field Map',
   '/soil': 'Soil Health',
   '/water': 'Water Management',
@@ -21,7 +20,6 @@ const PAGE_TITLES = {
   '/pests': 'Pest & Disease Control',
   '/weather': 'Weather Intelligence',
   '/advisor': 'AI Advisor',
-  '/organization': 'Organization',
 };
 
 export default function App() {
@@ -43,7 +41,6 @@ export default function App() {
               <Route path="/pests" element={<PestControl />} />
               <Route path="/weather" element={<Weather />} />
               <Route path="/advisor" element={<AIAdvisor />} />
-              <Route path="/organization" element={<Organization />} />
             </Routes>
           </div>
         </div>
