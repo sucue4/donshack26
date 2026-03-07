@@ -41,6 +41,7 @@ export default function SoilHealth() {
   const [dataSource, setDataSource] = useState('sample');
 
   useEffect(() => {
+    // Fetch on initial mount only; user clicks "Update" for new location
     fetchSoilData();
   }, []);
 

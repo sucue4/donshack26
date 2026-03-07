@@ -52,6 +52,7 @@ export default function Weather() {
   const [summary, setSummary] = useState({});
 
   useEffect(() => {
+    // Fetch on initial mount only; user clicks "Update" for new location
     fetchWeather();
   }, []);
 
@@ -124,7 +125,7 @@ export default function Weather() {
       </div>
 
       <div className="metric-grid" style={{ marginBottom: 18 }}>
-        <MetricCard label="Temperature" value={summary.tempHigh || '--'} unit="C" change={`High: ${summary.tempHigh || '--'}C / Low: ${summary.tempLow || '--'}C`} changeType="neutral" />
+        <MetricCard label="Temperature" value={summary.tempHigh || '--'} unit="&deg;C" change={`High: ${summary.tempHigh || '--'}\u00B0C / Low: ${summary.tempLow || '--'}\u00B0C`} changeType="neutral" />
         <MetricCard label="Precipitation (7d)" value={summary.rain7d || '--'} unit="mm" change="Total 7-day rainfall" changeType="neutral" />
         <MetricCard label="ET0 (Today)" value={summary.et0 || '--'} unit="mm" change="Evapotranspiration" changeType="neutral" />
       </div>
@@ -142,7 +143,7 @@ export default function Weather() {
               <XAxis dataKey="time" tick={{ fill: '#9a9a9a', fontSize: 11 }} axisLine={false} tickLine={false} />
               <YAxis tick={{ fill: '#9a9a9a', fontSize: 11 }} axisLine={false} tickLine={false} />
               <Tooltip content={<CustomTooltip />} />
-              <Area type="monotone" dataKey="temp" stroke="#c0a030" strokeWidth={2} fill="url(#tempGrad)" name="Temp C" />
+              <Area type="monotone" dataKey="temp" stroke="#c0a030" strokeWidth={2} fill="url(#tempGrad)" name="Temp &deg;C" />
             </AreaChart>
           </ResponsiveContainer>
         </HudPanel>
@@ -171,9 +172,9 @@ export default function Weather() {
               <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6, color: '#2c2c2c' }}>{d.day}</div>
               <div style={{ fontSize: 11, color: '#6b6b6b', marginBottom: 6 }}>{d.condition}</div>
               <div style={{ fontSize: 18, fontWeight: 700, color: '#2c2c2c' }}>
-                {d.high}C
+                {d.high}&deg;C
               </div>
-              <div style={{ fontSize: 11, color: '#9a9a9a' }}>{d.low}C</div>
+              <div style={{ fontSize: 11, color: '#9a9a9a' }}>{d.low}&deg;C</div>
               {d.rain > 0 && (
                 <div style={{ fontSize: 11, color: '#4a7a8c', marginTop: 4 }}>
                   {d.rain}mm
@@ -193,7 +194,7 @@ export default function Weather() {
             <YAxis yAxisId="precip" orientation="right" tick={{ fill: '#9a9a9a', fontSize: 11 }} axisLine={false} tickLine={false} />
             <Tooltip content={<CustomTooltip />} />
             <Bar yAxisId="precip" dataKey="precip" fill="rgba(74,122,140,0.25)" radius={[4, 4, 0, 0]} name="Precip mm" />
-            <Line yAxisId="temp" type="monotone" dataKey="tempAvg" stroke="#c0a030" strokeWidth={2} dot={{ r: 3 }} name="Avg Temp C" />
+            <Line yAxisId="temp" type="monotone" dataKey="tempAvg" stroke="#c0a030" strokeWidth={2} dot={{ r: 3 }} name="Avg Temp &deg;C" />
           </ComposedChart>
         </ResponsiveContainer>
       </HudPanel>

@@ -58,6 +58,7 @@ export default function Dashboard() {
   const [lon, setLon] = useState('-92.31');
 
   useEffect(() => {
+    // Fetch on initial mount only; user clicks "Update" for new location
     fetchWeather();
   }, []);
 
@@ -144,7 +145,7 @@ export default function Dashboard() {
               <XAxis dataKey="day" tick={{ fill: '#9a9a9a', fontSize: 11 }} axisLine={false} tickLine={false} />
               <YAxis tick={{ fill: '#9a9a9a', fontSize: 11 }} axisLine={false} tickLine={false} />
               <Tooltip content={<CustomTooltip />} />
-              <Bar dataKey="temp" fill="#c0a030" radius={[4, 4, 0, 0]} name="Temp C" />
+              <Bar dataKey="temp" fill="#c0a030" radius={[4, 4, 0, 0]} name="Temp &deg;C" />
               <Bar dataKey="rain" fill="#4a7a8c" radius={[4, 4, 0, 0]} name="Rain mm" />
             </BarChart>
           </ResponsiveContainer>
