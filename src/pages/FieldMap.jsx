@@ -5,11 +5,11 @@ const TILE_URL = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Ima
 const TILE_ATTR = 'Esri, Maxar, Earthstar Geographics';
 
 const SAMPLE_FIELDS = [
-  { id: 1, name: 'Field A-1 (Corn)', coords: [[38.955, -92.335], [38.955, -92.315], [38.940, -92.315], [38.940, -92.335]], color: '#00d4ff', crop: 'Corn', acres: 80 },
-  { id: 2, name: 'Field A-2 (Soybean)', coords: [[38.940, -92.335], [38.940, -92.315], [38.925, -92.315], [38.925, -92.335]], color: '#00ff88', crop: 'Soybean', acres: 80 },
-  { id: 3, name: 'Field B-1 (Corn)', coords: [[38.955, -92.310], [38.955, -92.290], [38.940, -92.290], [38.940, -92.310]], color: '#00d4ff', crop: 'Corn', acres: 120 },
-  { id: 4, name: 'Field C-1 (Wheat)', coords: [[38.940, -92.310], [38.940, -92.290], [38.925, -92.290], [38.925, -92.310]], color: '#ffaa00', crop: 'Wheat', acres: 95 },
-  { id: 5, name: 'Field D-1 (Cover Crop)', coords: [[38.925, -92.335], [38.925, -92.315], [38.912, -92.315], [38.912, -92.335]], color: '#ff3355', crop: 'Cover Crop', acres: 65 },
+  { id: 1, name: 'Field A-1 (Corn)', coords: [[38.955, -92.335], [38.955, -92.315], [38.940, -92.315], [38.940, -92.335]], color: '#3d7a4a', crop: 'Corn', acres: 80 },
+  { id: 2, name: 'Field A-2 (Soybean)', coords: [[38.940, -92.335], [38.940, -92.315], [38.925, -92.315], [38.925, -92.335]], color: '#7ab87f', crop: 'Soybean', acres: 80 },
+  { id: 3, name: 'Field B-1 (Corn)', coords: [[38.955, -92.310], [38.955, -92.290], [38.940, -92.290], [38.940, -92.310]], color: '#3d7a4a', crop: 'Corn', acres: 120 },
+  { id: 4, name: 'Field C-1 (Wheat)', coords: [[38.940, -92.310], [38.940, -92.290], [38.925, -92.290], [38.925, -92.310]], color: '#c0a030', crop: 'Wheat', acres: 95 },
+  { id: 5, name: 'Field D-1 (Cover Crop)', coords: [[38.925, -92.335], [38.925, -92.315], [38.912, -92.315], [38.912, -92.335]], color: '#8a6a3a', crop: 'Cover Crop', acres: 65 },
 ];
 
 export default function FieldMap() {
@@ -64,13 +64,11 @@ export default function FieldMap() {
 
   return (
     <div className="fade-in">
-      <div className="page-title">
-        <span className="title-icon">◎</span> Field Map
-      </div>
-      <p className="page-subtitle">Interactive satellite view of your fields — click a field for details</p>
+      <div className="page-title">Field Map</div>
+      <p className="page-subtitle">Interactive satellite view of your fields -- click a field for details</p>
 
       <div className="grid-2-1">
-        <HudPanel title="Satellite View" icon="◎">
+        <HudPanel title="Satellite View">
           <div
             ref={mapRef}
             style={{ height: 500, borderRadius: 6, overflow: 'hidden' }}
@@ -78,7 +76,7 @@ export default function FieldMap() {
         </HudPanel>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <HudPanel title="Field Registry" icon="▦">
+          <HudPanel title="Field Registry">
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
               {SAMPLE_FIELDS.map((f) => (
                 <button
@@ -91,8 +89,8 @@ export default function FieldMap() {
                   }}
                   style={{
                     display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px',
-                    background: selectedField?.id === f.id ? 'rgba(0,212,255,0.1)' : 'transparent',
-                    border: `1px solid ${selectedField?.id === f.id ? 'rgba(0,212,255,0.3)' : 'transparent'}`,
+                    background: selectedField?.id === f.id ? 'rgba(61,122,74,0.08)' : 'transparent',
+                    border: `1px solid ${selectedField?.id === f.id ? 'rgba(61,122,74,0.2)' : 'transparent'}`,
                     borderRadius: 4, cursor: 'pointer', textAlign: 'left', width: '100%',
                     transition: 'all 0.15s ease', color: 'var(--text-primary)', fontFamily: 'inherit',
                   }}
@@ -108,7 +106,7 @@ export default function FieldMap() {
           </HudPanel>
 
           {selectedField && (
-            <HudPanel title="Field Details" icon="◇">
+            <HudPanel title="Field Details">
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 <div style={{ fontFamily: 'var(--font-heading)', fontSize: 16, color: 'var(--accent-primary)' }}>
                   {selectedField.name}
@@ -121,7 +119,7 @@ export default function FieldMap() {
                   ['Last Scouted', '3 days ago'],
                   ['Growth Stage', 'V8 (Corn)'],
                 ].map(([k, v]) => (
-                  <div key={k} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, borderBottom: '1px solid rgba(0,212,255,0.06)', paddingBottom: 4 }}>
+                  <div key={k} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, borderBottom: '1px solid #f0eeea', paddingBottom: 4 }}>
                     <span style={{ color: 'var(--text-dim)' }}>{k}</span>
                     <span style={{ color: 'var(--text-primary)', fontWeight: 500 }}>{v}</span>
                   </div>

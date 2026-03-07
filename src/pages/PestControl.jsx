@@ -22,9 +22,9 @@ const diseaseRisk = [
 ];
 
 const scoutingLog = [
-  { date: 'Mar 5', field: 'A-1', finding: 'Japanese beetle adults — 2 per plant avg', severity: 'Moderate', action: 'Monitor — below threshold' },
+  { date: 'Mar 5', field: 'A-1', finding: 'Japanese beetle adults -- 2 per plant avg', severity: 'Moderate', action: 'Monitor -- below threshold' },
   { date: 'Mar 3', field: 'B-1', finding: 'Gray leaf spot lesions on lower canopy', severity: 'Low', action: 'Fungicide application scheduled' },
-  { date: 'Mar 1', field: 'A-2', finding: 'Soybean aphids — 85 per plant', severity: 'High', action: 'Reached 250 threshold — treat' },
+  { date: 'Mar 1', field: 'A-2', finding: 'Soybean aphids -- 85 per plant', severity: 'High', action: 'Reached 250 threshold -- treat' },
   { date: 'Feb 28', field: 'C-1', finding: 'No significant pest activity', severity: 'None', action: 'Continue monitoring' },
   { date: 'Feb 25', field: 'D-1', finding: 'Armyworm moth trap count elevated', severity: 'Low', action: 'Scout larvae in 5 days' },
 ];
@@ -41,10 +41,11 @@ const CustomTooltip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null;
   return (
     <div style={{
-      background: 'rgba(10,20,40,0.95)', border: '1px solid rgba(0,212,255,0.3)',
-      borderRadius: 4, padding: '8px 12px', fontSize: 11, fontFamily: 'var(--font-body)', color: '#e0eaff',
+      background: '#fff', border: '1px solid #e2e0dc',
+      borderRadius: 4, padding: '8px 12px', fontSize: 11, fontFamily: 'var(--font-body)', color: '#2c2c2c',
+      boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
     }}>
-      <div style={{ color: 'rgba(0,212,255,0.7)', marginBottom: 4, fontWeight: 600 }}>{label}</div>
+      <div style={{ color: '#2c2c2c', marginBottom: 4, fontWeight: 600 }}>{label}</div>
       {payload.map((p, i) => (
         <div key={i} style={{ color: p.color }}>{p.name}: {p.value}</div>
       ))}
@@ -57,33 +58,31 @@ const riskColor = (val) => val >= 60 ? 'var(--status-danger)' : val >= 35 ? 'var
 export default function PestControl() {
   return (
     <div className="fade-in">
-      <div className="page-title">
-        <span className="title-icon">⚠</span> Pest & Disease Control
-      </div>
+      <div className="page-title">Pest & Disease Control</div>
       <p className="page-subtitle">
-        Integrated pest management — scouting logs, disease risk modeling, and treatment thresholds
+        Integrated pest management -- scouting logs, disease risk modeling, and treatment thresholds
       </p>
 
       <div className="metric-grid" style={{ marginBottom: 18 }}>
-        <MetricCard label="Overall Pest Pressure" value="Medium" icon="⚠" change="Declining trend" changeType="positive" />
-        <MetricCard label="Disease Risk" value="Moderate" icon="◈" change="Gray leaf spot elevated" changeType="negative" />
-        <MetricCard label="Last Scouted" value="2" unit="days ago" icon="◎" change="Field A-1" changeType="neutral" />
-        <MetricCard label="Treatments Applied" value="1" icon="◉" change="Soybean aphid — A-2" changeType="neutral" />
+        <MetricCard label="Overall Pest Pressure" value="Medium" change="Declining trend" changeType="positive" />
+        <MetricCard label="Disease Risk" value="Moderate" change="Gray leaf spot elevated" changeType="negative" />
+        <MetricCard label="Last Scouted" value="2" unit="days ago" change="Field A-1" changeType="neutral" />
+        <MetricCard label="Treatments Applied" value="1" change="Soybean aphid -- A-2" changeType="neutral" />
       </div>
 
       <div className="grid-2" style={{ marginBottom: 18 }}>
-        <HudPanel title="Pest Pressure Index (Weekly)" icon="⚠">
+        <HudPanel title="Pest Pressure Index (Weekly)">
           <ResponsiveContainer width="100%" height={200}>
             <LineChart data={pestTrend}>
-              <XAxis dataKey="week" tick={{ fill: 'rgba(180,200,230,0.5)', fontSize: 10 }} axisLine={false} tickLine={false} />
-              <YAxis domain={[0, 60]} tick={{ fill: 'rgba(180,200,230,0.5)', fontSize: 10 }} axisLine={false} tickLine={false} />
+              <XAxis dataKey="week" tick={{ fill: '#9a9a9a', fontSize: 10 }} axisLine={false} tickLine={false} />
+              <YAxis domain={[0, 60]} tick={{ fill: '#9a9a9a', fontSize: 10 }} axisLine={false} tickLine={false} />
               <Tooltip content={<CustomTooltip />} />
-              <Line type="monotone" dataKey="pressure" stroke="#ffaa00" strokeWidth={2} dot={{ r: 3, fill: '#ffaa00' }} name="Pressure Index" />
+              <Line type="monotone" dataKey="pressure" stroke="#c0a030" strokeWidth={2} dot={{ r: 3, fill: '#c0a030' }} name="Pressure Index" />
             </LineChart>
           </ResponsiveContainer>
         </HudPanel>
 
-        <HudPanel title="Disease Risk Assessment" icon="◈">
+        <HudPanel title="Disease Risk Assessment">
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {diseaseRisk.map((d) => (
               <div key={d.disease}>
@@ -92,7 +91,7 @@ export default function PestControl() {
                   <span style={{ fontSize: 11, fontWeight: 600, color: riskColor(d.risk) }}>{d.risk}%</span>
                 </div>
                 <div style={{
-                  height: 4, background: 'rgba(0,212,255,0.1)', borderRadius: 2, overflow: 'hidden',
+                  height: 4, background: 'rgba(61,122,74,0.1)', borderRadius: 2, overflow: 'hidden',
                 }}>
                   <div style={{
                     height: '100%', width: `${d.risk}%`, borderRadius: 2,
@@ -106,7 +105,7 @@ export default function PestControl() {
         </HudPanel>
       </div>
 
-      <HudPanel title="Scouting Log" icon="◎" className="mb-2">
+      <HudPanel title="Scouting Log" className="mb-2">
         <table className="data-table">
           <thead>
             <tr>
@@ -135,7 +134,7 @@ export default function PestControl() {
         </table>
       </HudPanel>
 
-      <HudPanel title="IPM Treatment Protocols" icon="◇">
+      <HudPanel title="IPM Treatment Protocols">
         <table className="data-table">
           <thead>
             <tr>
