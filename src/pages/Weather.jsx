@@ -5,6 +5,7 @@ import {
 } from 'recharts';
 import HudPanel from '../components/HudPanel';
 import MetricCard from '../components/MetricCard';
+import FARM_FIELDS from '../fields';
 
 const monthlyClimate = [
   { month: 'Jan', tempAvg: 0, precip: 42 }, { month: 'Feb', tempAvg: 3, precip: 48 },
@@ -44,85 +45,111 @@ const conditionLabel = (code) => {
 };
 
 export default function Weather() {
-  const [lat, setLat] = useState('38.94');
-  const [lon, setLon] = useState('-92.31');
+  const [selectedField, setSelectedField] = useState(FARM_FIELDS[0]);
+  const [lat, setLat] = useState(FARM_FIELDS[0].lat.toString());
+  const [lon, setLon] = useState(FARM_FIELDS[0].lon.toString());
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
   const [hourlyData, setHourlyData] = useState([]);
   const [dailyData, setDailyData] = useState([]);
   const [summary, setSummary] = useState({});
 
   useEffect(() => {
-    // Fetch on initial mount only; user clicks "Update" for new location
     fetchWeather();
   }, []);
 
   const fetchWeather = async () => {
     setLoading(true);
+    setError(null);
     try {
       const res = await fetch(`/api/weather/forecast?lat=${lat}&lon=${lon}&days=7`);
-      if (res.ok) {
-        const data = await res.json();
-        // Parse hourly data (first 24 entries for today)
-        if (data.hourly && data.hourly.time) {
-          const hours = data.hourly.time.slice(0, 7).map((t, i) => {
-            const d = new Date(t);
-            const hour = d.getHours();
-            const label = hour === 0 ? '12AM' : hour < 12 ? `${hour}AM` : hour === 12 ? '12PM' : `${hour - 12}PM`;
-            return {
-              time: label,
-              temp: Math.round(data.hourly.temperature_2m[i] || 0),
-              humidity: Math.round(data.hourly.relativehumidity_2m?.[i] || 0),
-              wind: Math.round(data.hourly.windspeed_10m?.[i] || 0),
-            };
-          });
-          setHourlyData(hours);
-        }
-        // Parse daily data
-        if (data.daily && data.daily.time) {
-          const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-          const daily = data.daily.time.map((t, i) => ({
-            day: days[new Date(t).getDay()],
-            high: Math.round(data.daily.temperature_2m_max[i]),
-            low: Math.round(data.daily.temperature_2m_min[i]),
-            rain: Math.round((data.daily.precipitation_sum[i] || 0) * 10) / 10,
-            condition: conditionLabel(data.daily.weathercode?.[i] || 0),
-          }));
-          setDailyData(daily);
-
-          // Summary metrics
-          const todayHigh = data.daily.temperature_2m_max[0];
-          const todayLow = data.daily.temperature_2m_min[0];
-          const totalRain = data.daily.precipitation_sum.reduce((a, b) => a + (b || 0), 0);
-          const et0 = data.daily.et0_fao_evapotranspiration?.[0] || 0;
-          setSummary({
-            tempHigh: Math.round(todayHigh),
-            tempLow: Math.round(todayLow),
-            rain7d: Math.round(totalRain * 10) / 10,
-            et0: Math.round(et0 * 10) / 10,
-          });
-        }
+      if (!res.ok) {
+        throw new Error(`Server returned ${res.status}`);
       }
-    } catch {
-      // Fallback remains empty - UI shows "no data"
+      const data = await res.json();
+      // Parse hourly data (first 24 entries for today)
+      if (data.hourly && data.hourly.time) {
+        const hours = data.hourly.time.slice(0, 7).map((t, i) => {
+          const d = new Date(t);
+          const hour = d.getHours();
+          const label = hour === 0 ? '12AM' : hour < 12 ? `${hour}AM` : hour === 12 ? '12PM' : `${hour - 12}PM`;
+          return {
+            time: label,
+            temp: Math.round(data.hourly.temperature_2m[i] || 0),
+            humidity: Math.round(data.hourly.relativehumidity_2m?.[i] || data.hourly.relative_humidity_2m?.[i] || 0),
+            wind: Math.round(data.hourly.windspeed_10m?.[i] || data.hourly.wind_speed_10m?.[i] || 0),
+          };
+        });
+        setHourlyData(hours);
+      }
+      // Parse daily data
+      if (data.daily && data.daily.time) {
+        const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+        const daily = data.daily.time.map((t, i) => ({
+          day: days[new Date(t).getDay()],
+          high: Math.round(data.daily.temperature_2m_max[i]),
+          low: Math.round(data.daily.temperature_2m_min[i]),
+          rain: Math.round((data.daily.precipitation_sum[i] || 0) * 10) / 10,
+          condition: conditionLabel(data.daily.weathercode?.[i] || data.daily.weather_code?.[i] || 0),
+        }));
+        setDailyData(daily);
+
+        // Summary metrics
+        const todayHigh = data.daily.temperature_2m_max[0];
+        const todayLow = data.daily.temperature_2m_min[0];
+        const totalRain = data.daily.precipitation_sum.reduce((a, b) => a + (b || 0), 0);
+        const et0 = data.daily.et0_fao_evapotranspiration?.[0] || 0;
+        setSummary({
+          tempHigh: Math.round(todayHigh),
+          tempLow: Math.round(todayLow),
+          rain7d: Math.round(totalRain * 10) / 10,
+          et0: Math.round(et0 * 10) / 10,
+        });
+      }
+    } catch (e) {
+      setError(`Weather data unavailable: ${e.message}`);
     }
     setLoading(false);
   };
 
+  const handleFieldSelect = (e) => {
+    const field = FARM_FIELDS.find((f) => f.id === Number(e.target.value));
+    if (field) {
+      setSelectedField(field);
+      setLat(field.lat.toString());
+      setLon(field.lon.toString());
+    }
+  };
+
   return (
     <div className="fade-in">
-      <div className="page-title">Weather Intelligence</div>
       <p className="page-subtitle">
         Forecast, historical climate, and agricultural weather indices -- powered by Open-Meteo
       </p>
 
       <div className="location-bar">
-        <label>Location:</label>
+        <label>Field:</label>
+        <select
+          className="field-select"
+          value={selectedField?.id || ''}
+          onChange={handleFieldSelect}
+        >
+          {FARM_FIELDS.map((f) => (
+            <option key={f.id} value={f.id}>{f.name} ({f.acres} ac)</option>
+          ))}
+        </select>
+        <label>Lat:</label>
         <input type="text" value={lat} onChange={(e) => setLat(e.target.value)} placeholder="Latitude" />
+        <label>Lon:</label>
         <input type="text" value={lon} onChange={(e) => setLon(e.target.value)} placeholder="Longitude" />
         <button className="btn btn-primary" onClick={fetchWeather} style={{ padding: '5px 12px', fontSize: 11 }}>
           {loading ? 'Loading...' : 'Update'}
         </button>
       </div>
+
+      {error && (
+        <div className="data-notice data-notice-error">{error}</div>
+      )}
 
       <div className="metric-grid" style={{ marginBottom: 18 }}>
         <MetricCard label="Temperature" value={summary.tempHigh || '--'} unit="&deg;C" change={`High: ${summary.tempHigh || '--'}\u00B0C / Low: ${summary.tempLow || '--'}\u00B0C`} changeType="neutral" />
@@ -132,8 +159,11 @@ export default function Weather() {
 
       <div className="grid-2" style={{ marginBottom: 18 }}>
         <HudPanel title="Today -- Hourly Temperature">
+          {hourlyData.length === 0 && !loading && (
+            <div className="data-notice">No hourly data available</div>
+          )}
           <ResponsiveContainer width="100%" height={200}>
-            <AreaChart data={hourlyData}>
+            <AreaChart data={hourlyData.length ? hourlyData : [{ time: '--', temp: 0 }]}>
               <defs>
                 <linearGradient id="tempGrad" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor="#c0a030" stopOpacity={0.2} />
@@ -149,8 +179,11 @@ export default function Weather() {
         </HudPanel>
 
         <HudPanel title="Humidity and Wind">
+          {hourlyData.length === 0 && !loading && (
+            <div className="data-notice">No hourly data available</div>
+          )}
           <ResponsiveContainer width="100%" height={200}>
-            <LineChart data={hourlyData}>
+            <LineChart data={hourlyData.length ? hourlyData : [{ time: '--', humidity: 0, wind: 0 }]}>
               <XAxis dataKey="time" tick={{ fill: '#9a9a9a', fontSize: 11 }} axisLine={false} tickLine={false} />
               <YAxis tick={{ fill: '#9a9a9a', fontSize: 11 }} axisLine={false} tickLine={false} />
               <Tooltip content={<CustomTooltip />} />
@@ -163,6 +196,9 @@ export default function Weather() {
 
       {/* 7-Day Forecast */}
       <HudPanel title="7-Day Forecast" className="mb-2">
+        {dailyData.length === 0 && !loading && (
+          <div className="data-notice">No forecast data available -- check backend connection</div>
+        )}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 8 }}>
           {dailyData.map((d) => (
             <div key={d.day} style={{

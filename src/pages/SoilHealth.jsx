@@ -5,6 +5,7 @@ import {
 } from 'recharts';
 import HudPanel from '../components/HudPanel';
 import MetricCard from '../components/MetricCard';
+import FARM_FIELDS from '../fields';
 
 const FALLBACK_PROFILES = [
   { depth: '0-5 cm', clay: 22, sand: 38, silt: 40, ph: 6.5, organic: 3.2, nitrogen: 0.18, cec: 18.4 },
@@ -34,42 +35,58 @@ const CustomTooltip = ({ active, payload, label }) => {
 };
 
 export default function SoilHealth() {
-  const [lat, setLat] = useState('38.94');
-  const [lon, setLon] = useState('-92.31');
+  const [selectedField, setSelectedField] = useState(FARM_FIELDS[0]);
+  const [lat, setLat] = useState(FARM_FIELDS[0].lat.toString());
+  const [lon, setLon] = useState(FARM_FIELDS[0].lon.toString());
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
   const [soilProfiles, setSoilProfiles] = useState(FALLBACK_PROFILES);
   const [dataSource, setDataSource] = useState('sample');
 
   useEffect(() => {
-    // Fetch on initial mount only; user clicks "Update" for new location
     fetchSoilData();
   }, []);
 
   const fetchSoilData = async () => {
     setLoading(true);
+    setError(null);
     try {
       const res = await fetch(`/api/soil/properties?lat=${lat}&lon=${lon}`);
-      if (res.ok) {
-        const data = await res.json();
-        if (data.profiles && data.profiles.length > 0) {
-          const profiles = data.profiles.map((p) => ({
-            depth: p.depth.replace('cm', ' cm'),
-            clay: p.clay || 0,
-            sand: p.sand || 0,
-            silt: p.silt || 0,
-            ph: p.phh2o || 0,
-            organic: p.soc || 0,
-            nitrogen: p.nitrogen || 0,
-            cec: p.cec || 0,
-          }));
-          setSoilProfiles(profiles);
-          setDataSource('live');
-        }
+      if (!res.ok) {
+        throw new Error(`Server returned ${res.status}`);
       }
-    } catch {
-      // keep fallback data
+      const data = await res.json();
+      if (data.profiles && data.profiles.length > 0) {
+        const profiles = data.profiles.map((p) => ({
+          depth: p.depth.replace('cm', ' cm'),
+          clay: p.clay || 0,
+          sand: p.sand || 0,
+          silt: p.silt || 0,
+          ph: p.phh2o || 0,
+          organic: p.soc || 0,
+          nitrogen: p.nitrogen || 0,
+          cec: p.cec || 0,
+        }));
+        setSoilProfiles(profiles);
+        setDataSource('live');
+      } else {
+        throw new Error('No soil profile data returned');
+      }
+    } catch (e) {
+      setError(`Using sample data -- ${e.message}`);
+      setSoilProfiles(FALLBACK_PROFILES);
+      setDataSource('sample');
     }
     setLoading(false);
+  };
+
+  const handleFieldSelect = (e) => {
+    const field = FARM_FIELDS.find((f) => f.id === Number(e.target.value));
+    if (field) {
+      setSelectedField(field);
+      setLat(field.lat.toString());
+      setLon(field.lon.toString());
+    }
   };
 
   const topProfile = soilProfiles[0] || {};
@@ -93,20 +110,35 @@ export default function SoilHealth() {
 
   return (
     <div className="fade-in">
-      <div className="page-title">Soil Health Analysis</div>
       <p className="page-subtitle">
         Soil property data from ISRIC SoilGrids -- texture, pH, organic carbon, and nitrogen by depth
         {dataSource === 'live' && <span style={{ color: 'var(--accent-primary)', marginLeft: 8 }}>(Live data)</span>}
+        {dataSource === 'sample' && <span style={{ color: 'var(--status-warning)', marginLeft: 8 }}>(Sample data)</span>}
       </p>
 
       <div className="location-bar">
-        <label>Location:</label>
+        <label>Field:</label>
+        <select
+          className="field-select"
+          value={selectedField?.id || ''}
+          onChange={handleFieldSelect}
+        >
+          {FARM_FIELDS.map((f) => (
+            <option key={f.id} value={f.id}>{f.name} ({f.acres} ac)</option>
+          ))}
+        </select>
+        <label>Lat:</label>
         <input type="text" value={lat} onChange={(e) => setLat(e.target.value)} placeholder="Latitude" />
+        <label>Lon:</label>
         <input type="text" value={lon} onChange={(e) => setLon(e.target.value)} placeholder="Longitude" />
         <button className="btn btn-primary" onClick={fetchSoilData} style={{ padding: '5px 12px', fontSize: 11 }}>
           {loading ? 'Loading...' : 'Update'}
         </button>
       </div>
+
+      {error && (
+        <div className="data-notice">{error}</div>
+      )}
 
       {/* Metrics */}
       <div className="metric-grid" style={{ marginBottom: 18 }}>

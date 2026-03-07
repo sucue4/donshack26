@@ -1,10 +1,12 @@
 """Satellite imagery API routes."""
 
-from fastapi import APIRouter, Query
+import logging
+from fastapi import APIRouter, Query, HTTPException
 from pydantic import BaseModel
 from typing import List, Optional
 from services.earth_engine import get_ndvi_composite, get_historical_ndvi
 
+logger = logging.getLogger("ohdeere.satellite")
 router = APIRouter()
 
 
@@ -20,17 +22,25 @@ async def compute_ndvi(
     end_date: str = Query("2025-03-07"),
 ):
     """Compute NDVI/NDRE/NDMI for a field boundary."""
-    geometry = {
-        "type": "Polygon",
-        "coordinates": field.coordinates,
-        "name": field.name,
-    }
-    data = get_ndvi_composite(geometry, start_date, end_date)
-    return data
+    try:
+        geometry = {
+            "type": "Polygon",
+            "coordinates": field.coordinates,
+            "name": field.name,
+        }
+        data = get_ndvi_composite(geometry, start_date, end_date)
+        return data
+    except Exception as e:
+        logger.error("NDVI computation failed: %s", e)
+        raise HTTPException(status_code=502, detail=f"Satellite service unavailable: {e}")
 
 
 @router.get("/historical-ndvi")
 async def historical_ndvi(years: int = Query(3, description="Years of history")):
     """Get historical NDVI seasonal pattern."""
-    data = get_historical_ndvi({}, years)
-    return data
+    try:
+        data = get_historical_ndvi({}, years)
+        return data
+    except Exception as e:
+        logger.error("Historical NDVI failed: %s", e)
+        raise HTTPException(status_code=502, detail=f"Satellite history service unavailable: {e}")

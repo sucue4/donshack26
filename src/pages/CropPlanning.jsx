@@ -63,7 +63,6 @@ const cropColor = (crop) => {
 export default function CropPlanning() {
   return (
     <div className="fade-in">
-      <div className="page-title">Crop Planning & Rotation</div>
       <p className="page-subtitle">
         Growing degree day tracking, yield projections, and multi-year rotation management
       </p>
