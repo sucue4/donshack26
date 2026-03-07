@@ -38,10 +38,12 @@ const CustomTooltip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null;
   return (
     <div style={{
-      background: 'rgba(10,20,40,0.95)', border: '1px solid rgba(0,212,255,0.3)',
-      borderRadius: 4, padding: '8px 12px', fontSize: 11, fontFamily: 'var(--font-body)', color: '#e0eaff',
+      background: '#fff', border: '1px solid #e2e0dc',
+      borderRadius: 6, padding: '8px 12px', fontSize: 12,
+      fontFamily: 'var(--font-body)', color: '#2c2c2c',
+      boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
     }}>
-      <div style={{ color: 'rgba(0,212,255,0.7)', marginBottom: 4, fontWeight: 600 }}>{label}</div>
+      <div style={{ color: '#6b6b6b', marginBottom: 4, fontWeight: 600 }}>{label}</div>
       {payload.map((p, i) => (
         <div key={i} style={{ color: p.color }}>{p.name}: {p.value}</div>
       ))}
@@ -52,68 +54,66 @@ const CustomTooltip = ({ active, payload, label }) => {
 export default function WaterManagement() {
   return (
     <div className="fade-in">
-      <div className="page-title">
-        <span className="title-icon">◉</span> Water Management
-      </div>
+      <div className="page-title">Water Management</div>
       <p className="page-subtitle">
-        Soil moisture, precipitation tracking, and evapotranspiration analysis — data from Open-Meteo & SoilGrids
+        Soil moisture, precipitation tracking, and evapotranspiration analysis
       </p>
 
       <div className="metric-grid" style={{ marginBottom: 18 }}>
-        <MetricCard label="Avg Soil Moisture" value="28" unit="%" icon="◉" change="-6% below optimal" changeType="negative" />
-        <MetricCard label="Rainfall (7d)" value="26.8" unit="mm" icon="☁" change="Below normal" changeType="negative" />
-        <MetricCard label="ET₀ Today" value="4.7" unit="mm" icon="☀" change="High evapotranspiration" changeType="warning" />
-        <MetricCard label="Water Balance" value="-18" unit="mm" icon="▼" change="Deficit this month" changeType="negative" />
-        <MetricCard label="Fields Need Water" value="1" icon="⚠" change="Field A-1 priority" changeType="negative" />
-        <MetricCard label="Next Rain" value="Thu" icon="☁" change="~12mm expected" changeType="positive" />
+        <MetricCard label="Avg Soil Moisture" value="28" unit="%" change="-6% below optimal" changeType="negative" />
+        <MetricCard label="Rainfall (7d)" value="26.8" unit="mm" change="Below normal" changeType="negative" />
+        <MetricCard label="ET0 Today" value="4.7" unit="mm" change="High evapotranspiration" changeType="negative" />
+        <MetricCard label="Water Balance" value="-18" unit="mm" change="Deficit this month" changeType="negative" />
+        <MetricCard label="Fields Need Water" value="1" change="Field A-1 priority" changeType="negative" />
+        <MetricCard label="Next Rain" value="Thu" change="~12mm expected" changeType="positive" />
       </div>
 
       <div className="grid-2" style={{ marginBottom: 18 }}>
-        <HudPanel title="Soil Moisture Trend" icon="◉">
+        <HudPanel title="Soil Moisture Trend">
           <ResponsiveContainer width="100%" height={200}>
             <AreaChart data={moistureTrend}>
               <defs>
                 <linearGradient id="moistGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#00d4ff" stopOpacity={0.3} />
-                  <stop offset="100%" stopColor="#00d4ff" stopOpacity={0} />
+                  <stop offset="0%" stopColor="#4a7a8c" stopOpacity={0.2} />
+                  <stop offset="100%" stopColor="#4a7a8c" stopOpacity={0} />
                 </linearGradient>
               </defs>
-              <XAxis dataKey="date" tick={{ fill: 'rgba(180,200,230,0.5)', fontSize: 10 }} axisLine={false} tickLine={false} />
-              <YAxis domain={[15, 45]} tick={{ fill: 'rgba(180,200,230,0.5)', fontSize: 10 }} axisLine={false} tickLine={false} />
+              <XAxis dataKey="date" tick={{ fill: '#9a9a9a', fontSize: 11 }} axisLine={false} tickLine={false} />
+              <YAxis domain={[15, 45]} tick={{ fill: '#9a9a9a', fontSize: 11 }} axisLine={false} tickLine={false} />
               <Tooltip content={<CustomTooltip />} />
-              <Area type="monotone" dataKey="field" stroke="#00d4ff" strokeWidth={2} fill="url(#moistGrad)" name="Field Avg %" />
-              <Line type="monotone" dataKey="optimal" stroke="rgba(0,255,136,0.4)" strokeDasharray="5 5" strokeWidth={1} dot={false} name="Optimal %" />
+              <Area type="monotone" dataKey="field" stroke="#4a7a8c" strokeWidth={2} fill="url(#moistGrad)" name="Field Avg %" />
+              <Line type="monotone" dataKey="optimal" stroke="rgba(61,122,74,0.4)" strokeDasharray="5 5" strokeWidth={1} dot={false} name="Optimal %" />
             </AreaChart>
           </ResponsiveContainer>
         </HudPanel>
 
-        <HudPanel title="Evapotranspiration vs Rainfall" icon="☀">
+        <HudPanel title="Evapotranspiration vs Rainfall">
           <ResponsiveContainer width="100%" height={200}>
             <BarChart data={etData}>
-              <XAxis dataKey="day" tick={{ fill: 'rgba(180,200,230,0.5)', fontSize: 10 }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fill: 'rgba(180,200,230,0.5)', fontSize: 10 }} axisLine={false} tickLine={false} />
+              <XAxis dataKey="day" tick={{ fill: '#9a9a9a', fontSize: 11 }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fill: '#9a9a9a', fontSize: 11 }} axisLine={false} tickLine={false} />
               <Tooltip content={<CustomTooltip />} />
-              <Bar dataKey="et0" fill="rgba(255,170,0,0.5)" radius={[3, 3, 0, 0]} name="ET₀ mm" />
-              <Bar dataKey="rain" fill="rgba(0,212,255,0.5)" radius={[3, 3, 0, 0]} name="Rain mm" />
+              <Bar dataKey="et0" fill="#c0a030" radius={[4, 4, 0, 0]} name="ET0 mm" />
+              <Bar dataKey="rain" fill="#4a7a8c" radius={[4, 4, 0, 0]} name="Rain mm" />
             </BarChart>
           </ResponsiveContainer>
         </HudPanel>
       </div>
 
       <div className="grid-2" style={{ marginBottom: 18 }}>
-        <HudPanel title="Precipitation History (Monthly)" icon="☁">
+        <HudPanel title="Precipitation History (Monthly)">
           <ResponsiveContainer width="100%" height={200}>
             <BarChart data={precipHistory}>
-              <XAxis dataKey="month" tick={{ fill: 'rgba(180,200,230,0.5)', fontSize: 10 }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fill: 'rgba(180,200,230,0.5)', fontSize: 10 }} axisLine={false} tickLine={false} />
+              <XAxis dataKey="month" tick={{ fill: '#9a9a9a', fontSize: 11 }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fill: '#9a9a9a', fontSize: 11 }} axisLine={false} tickLine={false} />
               <Tooltip content={<CustomTooltip />} />
-              <Bar dataKey="actual" fill="rgba(0,212,255,0.5)" radius={[3, 3, 0, 0]} name="Actual mm" />
-              <Bar dataKey="normal" fill="rgba(0,212,255,0.15)" radius={[3, 3, 0, 0]} name="Normal mm" />
+              <Bar dataKey="actual" fill="#4a7a8c" radius={[4, 4, 0, 0]} name="Actual mm" />
+              <Bar dataKey="normal" fill="rgba(74,122,140,0.25)" radius={[4, 4, 0, 0]} name="Normal mm" />
             </BarChart>
           </ResponsiveContainer>
         </HudPanel>
 
-        <HudPanel title="Irrigation Priority Queue" icon="⚠">
+        <HudPanel title="Irrigation Priority Queue">
           <table className="data-table">
             <thead>
               <tr>
@@ -136,7 +136,7 @@ export default function WaterManagement() {
                     </span>
                   </td>
                   <td>
-                    <span style={{ color: row.priority === 'High' ? 'var(--status-danger)' : row.priority === 'Medium' ? 'var(--status-warning)' : 'var(--text-dim)', fontWeight: 600, fontSize: 10 }}>
+                    <span style={{ color: row.priority === 'High' ? 'var(--status-danger)' : row.priority === 'Medium' ? 'var(--status-warning)' : 'var(--text-dim)', fontWeight: 600, fontSize: 11 }}>
                       {row.priority}
                     </span>
                   </td>

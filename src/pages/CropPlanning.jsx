@@ -43,10 +43,11 @@ const CustomTooltip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null;
   return (
     <div style={{
-      background: 'rgba(10,20,40,0.95)', border: '1px solid rgba(0,212,255,0.3)',
-      borderRadius: 4, padding: '8px 12px', fontSize: 11, fontFamily: 'var(--font-body)', color: '#e0eaff',
+      background: '#fff', border: '1px solid #e2e0dc',
+      borderRadius: 4, padding: '8px 12px', fontSize: 11, fontFamily: 'var(--font-body)', color: '#2c2c2c',
+      boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
     }}>
-      <div style={{ color: 'rgba(0,212,255,0.7)', marginBottom: 4, fontWeight: 600 }}>{label}</div>
+      <div style={{ color: '#2c2c2c', marginBottom: 4, fontWeight: 600 }}>{label}</div>
       {payload.map((p, i) => (
         <div key={i} style={{ color: p.color }}>{p.name}: {p.value}</div>
       ))}
@@ -55,52 +56,50 @@ const CustomTooltip = ({ active, payload, label }) => {
 };
 
 const cropColor = (crop) => {
-  const map = { Corn: '#00d4ff', Soybean: '#00ff88', Wheat: '#ffaa00', 'Cover Crop': '#ff3355', 'Wheat/Cover': '#ffaa00' };
+  const map = { Corn: '#3d7a4a', Soybean: '#7ab87f', Wheat: '#c0a030', 'Cover Crop': '#8a6a3a', 'Wheat/Cover': '#c0a030' };
   return map[crop] || map[Object.keys(map).find(k => crop.includes(k))] || 'var(--text-dim)';
 };
 
 export default function CropPlanning() {
   return (
     <div className="fade-in">
-      <div className="page-title">
-        <span className="title-icon">❋</span> Crop Planning & Rotation
-      </div>
+      <div className="page-title">Crop Planning & Rotation</div>
       <p className="page-subtitle">
         Growing degree day tracking, yield projections, and multi-year rotation management
       </p>
 
       <div className="metric-grid" style={{ marginBottom: 18 }}>
-        <MetricCard label="Season GDD" value="1,847" unit="°F·days" icon="☀" change="On track for corn maturity" changeType="positive" />
-        <MetricCard label="Days to Maturity" value="42" unit="days" icon="◎" change="Est. harvest Oct 12" changeType="neutral" />
-        <MetricCard label="Corn Yield Est." value="200" unit="bu/ac" icon="❋" change="+5.3% vs 5yr avg" changeType="positive" />
-        <MetricCard label="Soybean Yield Est." value="60" unit="bu/ac" icon="❋" change="+7.1% vs 5yr avg" changeType="positive" />
+        <MetricCard label="Season GDD" value="1,847" unit="°F·days" change="On track for corn maturity" changeType="positive" />
+        <MetricCard label="Days to Maturity" value="42" unit="days" change="Est. harvest Oct 12" changeType="neutral" />
+        <MetricCard label="Corn Yield Est." value="200" unit="bu/ac" change="+5.3% vs 5yr avg" changeType="positive" />
+        <MetricCard label="Soybean Yield Est." value="60" unit="bu/ac" change="+7.1% vs 5yr avg" changeType="positive" />
       </div>
 
       <div className="grid-2" style={{ marginBottom: 18 }}>
-        <HudPanel title="Weekly GDD Accumulation" icon="☀">
+        <HudPanel title="Weekly GDD Accumulation">
           <ResponsiveContainer width="100%" height={200}>
             <BarChart data={gddData}>
-              <XAxis dataKey="week" tick={{ fill: 'rgba(180,200,230,0.5)', fontSize: 10 }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fill: 'rgba(180,200,230,0.5)', fontSize: 10 }} axisLine={false} tickLine={false} />
+              <XAxis dataKey="week" tick={{ fill: '#9a9a9a', fontSize: 10 }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fill: '#9a9a9a', fontSize: 10 }} axisLine={false} tickLine={false} />
               <Tooltip content={<CustomTooltip />} />
-              <Bar dataKey="gdd" fill="rgba(0,212,255,0.5)" radius={[3, 3, 0, 0]} name="GDD (°F·days)" />
+              <Bar dataKey="gdd" fill="rgba(61,122,74,0.5)" radius={[3, 3, 0, 0]} name="GDD (°F·days)" />
             </BarChart>
           </ResponsiveContainer>
         </HudPanel>
 
-        <HudPanel title="Yield Projections (bu/ac)" icon="❋">
+        <HudPanel title="Yield Projections (bu/ac)">
           <ResponsiveContainer width="100%" height={200}>
             <LineChart data={yieldProjection}>
-              <XAxis dataKey="year" tick={{ fill: 'rgba(180,200,230,0.5)', fontSize: 10 }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fill: 'rgba(180,200,230,0.5)', fontSize: 10 }} axisLine={false} tickLine={false} />
+              <XAxis dataKey="year" tick={{ fill: '#9a9a9a', fontSize: 10 }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fill: '#9a9a9a', fontSize: 10 }} axisLine={false} tickLine={false} />
               <Tooltip content={<CustomTooltip />} />
-              <Line type="monotone" dataKey="corn" stroke="#00d4ff" strokeWidth={2} dot={{ r: 3 }} name="Corn" />
-              <Line type="monotone" dataKey="soy" stroke="#00ff88" strokeWidth={2} dot={{ r: 3 }} name="Soybean" />
-              <Line type="monotone" dataKey="wheat" stroke="#ffaa00" strokeWidth={2} dot={{ r: 3 }} name="Wheat" />
+              <Line type="monotone" dataKey="corn" stroke="#3d7a4a" strokeWidth={2} dot={{ r: 3 }} name="Corn" />
+              <Line type="monotone" dataKey="soy" stroke="#7ab87f" strokeWidth={2} dot={{ r: 3 }} name="Soybean" />
+              <Line type="monotone" dataKey="wheat" stroke="#c0a030" strokeWidth={2} dot={{ r: 3 }} name="Wheat" />
             </LineChart>
           </ResponsiveContainer>
           <div style={{ display: 'flex', gap: 16, justifyContent: 'center', marginTop: 8 }}>
-            {[{ l: 'Corn', c: '#00d4ff' }, { l: 'Soybean', c: '#00ff88' }, { l: 'Wheat', c: '#ffaa00' }].map((x) => (
+            {[{ l: 'Corn', c: '#3d7a4a' }, { l: 'Soybean', c: '#7ab87f' }, { l: 'Wheat', c: '#c0a030' }].map((x) => (
               <div key={x.l} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, color: 'var(--text-dim)' }}>
                 <div style={{ width: 8, height: 8, borderRadius: '50%', background: x.c }} /> {x.l}
               </div>
@@ -110,7 +109,7 @@ export default function CropPlanning() {
       </div>
 
       {/* Rotation Plan */}
-      <HudPanel title="Multi-Year Rotation Plan" icon="◎" className="mb-2">
+      <HudPanel title="Multi-Year Rotation Plan" className="mb-2">
         <table className="data-table">
           <thead>
             <tr>
@@ -137,7 +136,7 @@ export default function CropPlanning() {
       </HudPanel>
 
       {/* Crop Reference */}
-      <HudPanel title="Crop Reference Database" icon="◇">
+      <HudPanel title="Crop Reference Database">
         <table className="data-table">
           <thead>
             <tr>
