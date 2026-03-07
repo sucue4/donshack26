@@ -80,7 +80,6 @@ export default function FieldMap() {
 
   return (
     <div className="fade-in">
-      <div className="page-title">Field Map</div>
       <p className="page-subtitle">Interactive satellite view of your fields -- click a field for details</p>
 
       <div className="grid-2-1">

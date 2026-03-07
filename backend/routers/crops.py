@@ -1,7 +1,9 @@
 """Crop planning API routes."""
 
+import logging
 from fastapi import APIRouter, Query
 
+logger = logging.getLogger("ohdeere.crops")
 router = APIRouter()
 
 # Growing Degree Day base temperatures (°F)

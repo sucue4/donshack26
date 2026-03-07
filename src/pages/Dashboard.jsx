@@ -5,6 +5,7 @@ import {
 } from 'recharts';
 import HudPanel from '../components/HudPanel';
 import MetricCard from '../components/MetricCard';
+import FARM_FIELDS from '../fields';
 
 const ndviHistory = [
   { week: 'W1', ndvi: 0.42 }, { week: 'W2', ndvi: 0.48 },
@@ -33,6 +34,13 @@ const alerts = [
   { id: 4, type: 'danger', message: 'Japanese beetle activity detected in adjacent county', time: '1d ago' },
 ];
 
+const FALLBACK_WEATHER = [
+  { day: 'Mon', temp: 24, rain: 0 },  { day: 'Tue', temp: 26, rain: 2 },
+  { day: 'Wed', temp: 23, rain: 8 },  { day: 'Thu', temp: 21, rain: 12 },
+  { day: 'Fri', temp: 22, rain: 5 },  { day: 'Sat', temp: 25, rain: 0 },
+  { day: 'Sun', temp: 27, rain: 0 },
+];
+
 const CustomTooltip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null;
   return (
@@ -54,15 +62,17 @@ const CustomTooltip = ({ active, payload, label }) => {
 
 export default function Dashboard() {
   const [weatherData, setWeatherData] = useState([]);
-  const [lat, setLat] = useState('38.94');
-  const [lon, setLon] = useState('-92.31');
+  const [weatherError, setWeatherError] = useState(null);
+  const [selectedField, setSelectedField] = useState(FARM_FIELDS[0]);
+  const [lat, setLat] = useState(FARM_FIELDS[0].lat.toString());
+  const [lon, setLon] = useState(FARM_FIELDS[0].lon.toString());
 
   useEffect(() => {
-    // Fetch on initial mount only; user clicks "Update" for new location
     fetchWeather();
   }, []);
 
   const fetchWeather = async () => {
+    setWeatherError(null);
     try {
       const res = await fetch(`/api/weather/forecast?lat=${lat}&lon=${lon}&days=7`);
       if (res.ok) {
@@ -76,16 +86,22 @@ export default function Dashboard() {
             rain: Math.round((daily.precipitation_sum[i] || 0) * 10) / 10,
           }));
           setWeatherData(forecast);
+          return;
         }
       }
-    } catch {
-      // Fallback to sample data if backend not available
-      setWeatherData([
-        { day: 'Mon', temp: 24, rain: 0 },  { day: 'Tue', temp: 26, rain: 2 },
-        { day: 'Wed', temp: 23, rain: 8 },  { day: 'Thu', temp: 21, rain: 12 },
-        { day: 'Fri', temp: 22, rain: 5 },  { day: 'Sat', temp: 25, rain: 0 },
-        { day: 'Sun', temp: 27, rain: 0 },
-      ]);
+      throw new Error(`Server returned ${res.status}`);
+    } catch (e) {
+      setWeatherError('Using sample data -- backend unavailable');
+      setWeatherData(FALLBACK_WEATHER);
+    }
+  };
+
+  const handleFieldSelect = (e) => {
+    const field = FARM_FIELDS.find((f) => f.id === Number(e.target.value));
+    if (field) {
+      setSelectedField(field);
+      setLat(field.lat.toString());
+      setLon(field.lon.toString());
     }
   };
 
@@ -95,13 +111,23 @@ export default function Dashboard() {
 
   return (
     <div className="fade-in">
-      <div className="page-title">Dashboard</div>
       <p className="page-subtitle">Overview of your farm operations and field intelligence</p>
 
       {/* Location selector */}
       <div className="location-bar">
-        <label>Location:</label>
+        <label>Field:</label>
+        <select
+          className="field-select"
+          value={selectedField?.id || ''}
+          onChange={handleFieldSelect}
+        >
+          {FARM_FIELDS.map((f) => (
+            <option key={f.id} value={f.id}>{f.name} ({f.acres} ac)</option>
+          ))}
+        </select>
+        <label>Lat:</label>
         <input type="text" value={lat} onChange={(e) => setLat(e.target.value)} placeholder="Latitude" />
+        <label>Lon:</label>
         <input type="text" value={lon} onChange={(e) => setLon(e.target.value)} placeholder="Longitude" />
         <button className="btn btn-primary" onClick={handleLocationChange} style={{ padding: '5px 12px', fontSize: 11 }}>
           Update
@@ -140,8 +166,11 @@ export default function Dashboard() {
 
         {/* Weather Forecast */}
         <HudPanel title="7-Day Forecast">
+          {weatherError && (
+            <div className="data-notice">{weatherError}</div>
+          )}
           <ResponsiveContainer width="100%" height={180}>
-            <BarChart data={weatherData.length ? weatherData : [{ day: 'Loading...', temp: 0, rain: 0 }]}>
+            <BarChart data={weatherData.length ? weatherData : [{ day: 'No data', temp: 0, rain: 0 }]}>
               <XAxis dataKey="day" tick={{ fill: '#9a9a9a', fontSize: 11 }} axisLine={false} tickLine={false} />
               <YAxis tick={{ fill: '#9a9a9a', fontSize: 11 }} axisLine={false} tickLine={false} />
               <Tooltip content={<CustomTooltip />} />
