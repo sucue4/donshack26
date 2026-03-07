@@ -5,23 +5,23 @@ import Header from './components/Header';
 import ErrorBoundary from './components/ErrorBoundary';
 import DebugPanel from './components/DebugPanel';
 import Dashboard from './pages/Dashboard';
+import Onboarding from './pages/Onboarding';
 import FieldMap from './pages/FieldMap';
+import WeatherForecast from './pages/WeatherForecast';
 import SoilHealth from './pages/SoilHealth';
-import WaterManagement from './pages/WaterManagement';
-import CropPlanning from './pages/CropPlanning';
-import PestControl from './pages/PestControl';
-import Weather from './pages/Weather';
-import AIAdvisor from './pages/AIAdvisor';
+import PestForecast from './pages/PestForecast';
+import DroughtResistance from './pages/DroughtResistance';
+import MonocultureRisk from './pages/MonocultureRisk';
 
 const PAGE_TITLES = {
-  '/': 'Dashboard',
+  '/': 'Yield Dashboard',
+  '/onboarding': 'Farm Setup',
   '/field-map': 'Field Map',
+  '/weather': 'Weather Forecasting',
   '/soil': 'Soil Health',
-  '/water': 'Water Management',
-  '/crops': 'Crop Planning',
-  '/pests': 'Pest & Disease Control',
-  '/weather': 'Weather Intelligence',
-  '/advisor': 'AI Advisor',
+  '/pests': 'Pest Forecasting',
+  '/drought': 'Drought Resistance',
+  '/monoculture': 'Monoculture Risk',
 };
 
 export default function App() {
@@ -49,13 +49,13 @@ export default function App() {
             <ErrorBoundary>
               <Routes>
                 <Route path="/" element={<Dashboard />} />
+                <Route path="/onboarding" element={<Onboarding />} />
                 <Route path="/field-map" element={<FieldMap />} />
+                <Route path="/weather" element={<WeatherForecast />} />
                 <Route path="/soil" element={<SoilHealth />} />
-                <Route path="/water" element={<WaterManagement />} />
-                <Route path="/crops" element={<CropPlanning />} />
-                <Route path="/pests" element={<PestControl />} />
-                <Route path="/weather" element={<Weather />} />
-                <Route path="/advisor" element={<AIAdvisor />} />
+                <Route path="/pests" element={<PestForecast />} />
+                <Route path="/drought" element={<DroughtResistance />} />
+                <Route path="/monoculture" element={<MonocultureRisk />} />
               </Routes>
             </ErrorBoundary>
           </div>

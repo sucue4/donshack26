@@ -3,17 +3,15 @@ import { useNavigate } from 'react-router-dom';
 
 const NAV_ITEMS = [
   { section: 'Overview' },
-  { path: '/',           label: 'Dashboard' },
+  { path: '/',           label: 'Yield Dashboard' },
+  { path: '/onboarding', label: 'Farm Setup' },
   { path: '/field-map',  label: 'Field Map' },
-  { section: 'Analytics' },
+  { section: 'Yield Analysis' },
+  { path: '/weather',    label: 'Weather Forecasting' },
   { path: '/soil',       label: 'Soil Health' },
-  { path: '/water',      label: 'Water Mgmt' },
-  { path: '/weather',    label: 'Weather' },
-  { section: 'Planning' },
-  { path: '/crops',      label: 'Crop Planning' },
-  { path: '/pests',      label: 'Pest Control' },
-  { section: 'Intelligence' },
-  { path: '/advisor',    label: 'AI Advisor' },
+  { path: '/pests',      label: 'Pest Forecasting' },
+  { path: '/drought',    label: 'Drought Resistance' },
+  { path: '/monoculture', label: 'Monoculture Risk' },
 ];
 
 export default function Sidebar({ currentPath, onNavigate }) {
@@ -30,7 +28,7 @@ export default function Sidebar({ currentPath, onNavigate }) {
         <div className="logo-icon">OD</div>
         <div>
           <h1>Oh Deere!</h1>
-          <div className="tagline">Precision Agriculture</div>
+          <div className="tagline">Yield Rate Intelligence</div>
         </div>
       </div>
       <nav className="sidebar-nav">
