@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import HudPanel from '../components/HudPanel';
 
-const TILE_URL = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
-const TILE_ATTR = 'Esri, Maxar, Earthstar Geographics';
+const SATELLITE_URL = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
+const SATELLITE_ATTR = 'Esri, Maxar, Earthstar Geographics';
+const STREET_URL = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+const STREET_ATTR = '&copy; OpenStreetMap contributors';
 
 const SAMPLE_FIELDS = [
   { id: 1, name: 'Field A-1 (Corn)', coords: [[38.955, -92.335], [38.955, -92.315], [38.940, -92.315], [38.940, -92.335]], color: '#3d7a4a', crop: 'Corn', acres: 80 },
@@ -15,8 +17,10 @@ const SAMPLE_FIELDS = [
 export default function FieldMap() {
   const mapRef = useRef(null);
   const mapInstance = useRef(null);
+  const layerRef = useRef(null);
   const [selectedField, setSelectedField] = useState(null);
   const [mapReady, setMapReady] = useState(false);
+  const [mapView, setMapView] = useState('satellite');
 
   useEffect(() => {
     if (mapInstance.current || !mapRef.current) return;
@@ -30,10 +34,11 @@ export default function FieldMap() {
       attributionControl: true,
     });
 
-    L.tileLayer(TILE_URL, {
-      attribution: TILE_ATTR,
+    const layer = L.tileLayer(SATELLITE_URL, {
+      attribution: SATELLITE_ATTR,
       maxZoom: 18,
     }).addTo(map);
+    layerRef.current = layer;
 
     SAMPLE_FIELDS.forEach((field) => {
       const polygon = L.polygon(field.coords, {
@@ -62,13 +67,30 @@ export default function FieldMap() {
     };
   }, []);
 
+  const toggleMapView = () => {
+    if (!mapInstance.current || !layerRef.current) return;
+    const L = window.L;
+    mapInstance.current.removeLayer(layerRef.current);
+    const newView = mapView === 'satellite' ? 'street' : 'satellite';
+    const url = newView === 'satellite' ? SATELLITE_URL : STREET_URL;
+    const attr = newView === 'satellite' ? SATELLITE_ATTR : STREET_ATTR;
+    layerRef.current = L.tileLayer(url, { attribution: attr, maxZoom: 18 }).addTo(mapInstance.current);
+    setMapView(newView);
+  };
+
   return (
     <div className="fade-in">
       <div className="page-title">Field Map</div>
       <p className="page-subtitle">Interactive satellite view of your fields -- click a field for details</p>
 
       <div className="grid-2-1">
-        <HudPanel title="Satellite View">
+        <HudPanel title="Satellite View"
+          actions={
+            <button className="btn" onClick={toggleMapView} style={{ padding: '4px 10px', fontSize: 10 }}>
+              {mapView === 'satellite' ? 'Street View' : 'Satellite View'}
+            </button>
+          }
+        >
           <div
             ref={mapRef}
             style={{ height: 500, borderRadius: 6, overflow: 'hidden' }}

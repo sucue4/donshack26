@@ -3,18 +3,17 @@ import { useNavigate } from 'react-router-dom';
 
 const NAV_ITEMS = [
   { section: 'Overview' },
-  { path: '/',           icon: '⬡', label: 'Dashboard' },
-  { path: '/field-map',  icon: '◎', label: 'Field Map' },
+  { path: '/',           label: 'Dashboard' },
+  { path: '/field-map',  label: 'Field Map' },
   { section: 'Analytics' },
-  { path: '/soil',       icon: '◈', label: 'Soil Health' },
-  { path: '/water',      icon: '◉', label: 'Water Mgmt' },
-  { path: '/weather',    icon: '☁', label: 'Weather' },
+  { path: '/soil',       label: 'Soil Health' },
+  { path: '/water',      label: 'Water Mgmt' },
+  { path: '/weather',    label: 'Weather' },
   { section: 'Planning' },
-  { path: '/crops',      icon: '❋', label: 'Crop Planning' },
-  { path: '/pests',      icon: '⚠', label: 'Pest Control' },
+  { path: '/crops',      label: 'Crop Planning' },
+  { path: '/pests',      label: 'Pest Control' },
   { section: 'Intelligence' },
-  { path: '/advisor',    icon: '◇', label: 'AI Advisor' },
-  { path: '/organization', icon: '▦', label: 'Organization' },
+  { path: '/advisor',    label: 'AI Advisor' },
 ];
 
 export default function Sidebar({ currentPath, onNavigate }) {
@@ -28,7 +27,7 @@ export default function Sidebar({ currentPath, onNavigate }) {
   return (
     <aside className="sidebar">
       <div className="sidebar-logo">
-        <div className="logo-icon">🌾</div>
+        <div className="logo-icon">OD</div>
         <div>
           <h1>Oh Deere!</h1>
           <div className="tagline">Precision Agriculture</div>
@@ -44,7 +43,6 @@ export default function Sidebar({ currentPath, onNavigate }) {
               className={`nav-item${currentPath === item.path ? ' active' : ''}`}
               onClick={() => handleClick(item.path)}
             >
-              <span className="nav-icon">{item.icon}</span>
               {item.label}
             </button>
           )

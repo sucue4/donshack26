@@ -12,7 +12,7 @@ export default function Header({ title }) {
     weekday: 'short', month: 'short', day: 'numeric',
   });
   const timeStr = time.toLocaleTimeString('en-US', {
-    hour: '2-digit', minute: '2-digit', second: '2-digit',
+    hour: '2-digit', minute: '2-digit',
   });
 
   const handleMinimize = () => window.electronAPI?.minimize();
@@ -26,13 +26,7 @@ export default function Header({ title }) {
       </div>
       <div className="header-right">
         <div className="header-status">
-          <div className="status-dot" />
-          <span>Systems Online</span>
-        </div>
-        <div className="header-status" style={{ marginLeft: 8 }}>
-          <span style={{ fontFamily: 'var(--font-display)', fontSize: 10, letterSpacing: 1 }}>
-            {dateStr} &middot; {timeStr}
-          </span>
+          <span>{dateStr} &middot; {timeStr}</span>
         </div>
         <div className="window-controls">
           <button className="window-btn minimize" onClick={handleMinimize} />

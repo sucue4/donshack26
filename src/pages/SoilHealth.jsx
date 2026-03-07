@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   BarChart, Bar, RadarChart, Radar, PolarGrid, PolarAngleAxis,
   PolarRadiusAxis, XAxis, YAxis, Tooltip, ResponsiveContainer,
@@ -6,7 +6,7 @@ import {
 import HudPanel from '../components/HudPanel';
 import MetricCard from '../components/MetricCard';
 
-const soilProfiles = [
+const FALLBACK_PROFILES = [
   { depth: '0-5 cm', clay: 22, sand: 38, silt: 40, ph: 6.5, organic: 3.2, nitrogen: 0.18, cec: 18.4 },
   { depth: '5-15 cm', clay: 24, sand: 36, silt: 40, ph: 6.3, organic: 2.8, nitrogen: 0.15, cec: 17.1 },
   { depth: '15-30 cm', clay: 28, sand: 34, silt: 38, ph: 6.1, organic: 1.9, nitrogen: 0.11, cec: 15.8 },
@@ -14,32 +14,16 @@ const soilProfiles = [
   { depth: '60-100 cm', clay: 35, sand: 28, silt: 37, ph: 5.9, organic: 0.6, nitrogen: 0.04, cec: 12.6 },
 ];
 
-const healthRadar = [
-  { property: 'pH Balance', value: 82, fullMark: 100 },
-  { property: 'Organic Carbon', value: 75, fullMark: 100 },
-  { property: 'Nitrogen', value: 68, fullMark: 100 },
-  { property: 'Moisture', value: 58, fullMark: 100 },
-  { property: 'CEC', value: 72, fullMark: 100 },
-  { property: 'Texture', value: 85, fullMark: 100 },
-];
-
-const textureData = [
-  { layer: '0-5cm', clay: 22, sand: 38, silt: 40 },
-  { layer: '5-15cm', clay: 24, sand: 36, silt: 40 },
-  { layer: '15-30cm', clay: 28, sand: 34, silt: 38 },
-  { layer: '30-60cm', clay: 32, sand: 30, silt: 38 },
-  { layer: '60-100cm', clay: 35, sand: 28, silt: 37 },
-];
-
 const CustomTooltip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null;
   return (
     <div style={{
-      background: 'rgba(10,20,40,0.95)', border: '1px solid rgba(0,212,255,0.3)',
-      borderRadius: 4, padding: '8px 12px', fontSize: 11,
-      fontFamily: 'var(--font-body)', color: '#e0eaff',
+      background: '#fff', border: '1px solid #e2e0dc',
+      borderRadius: 6, padding: '8px 12px', fontSize: 12,
+      fontFamily: 'var(--font-body)', color: '#2c2c2c',
+      boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
     }}>
-      <div style={{ color: 'rgba(0,212,255,0.7)', marginBottom: 4, fontWeight: 600 }}>{label}</div>
+      <div style={{ color: '#6b6b6b', marginBottom: 4, fontWeight: 600 }}>{label}</div>
       {payload.map((p, i) => (
         <div key={i} style={{ color: p.color || p.fill }}>
           {p.name}: {p.value}%
@@ -50,77 +34,123 @@ const CustomTooltip = ({ active, payload, label }) => {
 };
 
 export default function SoilHealth() {
-  const [selectedField, setSelectedField] = useState('Field A-1');
+  const [lat, setLat] = useState('38.94');
+  const [lon, setLon] = useState('-92.31');
+  const [loading, setLoading] = useState(false);
+  const [soilProfiles, setSoilProfiles] = useState(FALLBACK_PROFILES);
+  const [dataSource, setDataSource] = useState('sample');
+
+  useEffect(() => {
+    fetchSoilData();
+  }, []);
+
+  const fetchSoilData = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/soil/properties?lat=${lat}&lon=${lon}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.profiles && data.profiles.length > 0) {
+          const profiles = data.profiles.map((p) => ({
+            depth: p.depth.replace('cm', ' cm'),
+            clay: p.clay || 0,
+            sand: p.sand || 0,
+            silt: p.silt || 0,
+            ph: p.phh2o || 0,
+            organic: p.soc || 0,
+            nitrogen: p.nitrogen || 0,
+            cec: p.cec || 0,
+          }));
+          setSoilProfiles(profiles);
+          setDataSource('live');
+        }
+      }
+    } catch {
+      // keep fallback data
+    }
+    setLoading(false);
+  };
+
+  const topProfile = soilProfiles[0] || {};
+
+  const healthRadar = [
+    { property: 'pH Balance', value: Math.min(100, Math.round((topProfile.ph / 7) * 100)), fullMark: 100 },
+    { property: 'Organic Carbon', value: Math.min(100, Math.round((topProfile.organic / 5) * 100)), fullMark: 100 },
+    { property: 'Nitrogen', value: Math.min(100, Math.round((topProfile.nitrogen / 0.3) * 100)), fullMark: 100 },
+    { property: 'CEC', value: Math.min(100, Math.round((topProfile.cec / 25) * 100)), fullMark: 100 },
+    { property: 'Clay/Silt Ratio', value: Math.min(100, Math.round(((topProfile.silt || 1) / ((topProfile.clay || 1) + (topProfile.silt || 1))) * 100)), fullMark: 100 },
+  ];
+
+  const textureData = soilProfiles.map((p) => ({
+    layer: p.depth,
+    clay: p.clay,
+    sand: p.sand,
+    silt: p.silt,
+  }));
+
+  const overallScore = Math.round(healthRadar.reduce((a, h) => a + h.value, 0) / healthRadar.length);
 
   return (
     <div className="fade-in">
-      <div className="page-title">
-        <span className="title-icon">◈</span> Soil Health Analysis
-      </div>
+      <div className="page-title">Soil Health Analysis</div>
       <p className="page-subtitle">
-        Soil property data from ISRIC SoilGrids — texture, pH, organic carbon, and nitrogen by depth
+        Soil property data from ISRIC SoilGrids -- texture, pH, organic carbon, and nitrogen by depth
+        {dataSource === 'live' && <span style={{ color: 'var(--accent-primary)', marginLeft: 8 }}>(Live data)</span>}
       </p>
 
-      <div style={{ marginBottom: 16, display: 'flex', gap: 8, alignItems: 'center' }}>
-        <span style={{ fontSize: 11, color: 'var(--text-dim)' }}>Analyzing:</span>
-        {['Field A-1', 'Field A-2', 'Field B-1', 'Field C-1'].map((f) => (
-          <button
-            key={f}
-            className={selectedField === f ? 'btn btn-primary' : 'btn'}
-            onClick={() => setSelectedField(f)}
-            style={{ padding: '5px 12px', fontSize: 10 }}
-          >
-            {f}
-          </button>
-        ))}
+      <div className="location-bar">
+        <label>Location:</label>
+        <input type="text" value={lat} onChange={(e) => setLat(e.target.value)} placeholder="Latitude" />
+        <input type="text" value={lon} onChange={(e) => setLon(e.target.value)} placeholder="Longitude" />
+        <button className="btn btn-primary" onClick={fetchSoilData} style={{ padding: '5px 12px', fontSize: 11 }}>
+          {loading ? 'Loading...' : 'Update'}
+        </button>
       </div>
 
       {/* Metrics */}
       <div className="metric-grid" style={{ marginBottom: 18 }}>
-        <MetricCard label="Soil pH" value="6.5" icon="◈" change="Slightly acidic — optimal" changeType="positive" />
-        <MetricCard label="Organic Carbon" value="3.2" unit="%" icon="◉" change="Above average" changeType="positive" />
-        <MetricCard label="Total Nitrogen" value="0.18" unit="%" icon="▲" change="Adequate for corn" changeType="positive" />
-        <MetricCard label="CEC" value="18.4" unit="cmol/kg" icon="◇" change="Good nutrient holding" changeType="positive" />
-        <MetricCard label="Texture Class" value="Loam" icon="▦" />
-        <MetricCard label="Bulk Density" value="1.35" unit="g/cm³" icon="◎" change="Normal range" changeType="neutral" />
+        <MetricCard label="Soil pH" value={topProfile.ph?.toString() || '--'} change="Top layer" changeType="neutral" />
+        <MetricCard label="Organic Carbon" value={topProfile.organic?.toString() || '--'} unit="%" change="Top layer" changeType="neutral" />
+        <MetricCard label="Total Nitrogen" value={topProfile.nitrogen?.toString() || '--'} unit="%" change="Top layer" changeType="neutral" />
+        <MetricCard label="CEC" value={topProfile.cec?.toString() || '--'} unit="cmol/kg" change="Nutrient holding capacity" changeType="neutral" />
       </div>
 
       <div className="grid-2" style={{ marginBottom: 18 }}>
         {/* Soil Health Radar */}
-        <HudPanel title="Overall Soil Health Score" icon="◈">
+        <HudPanel title="Overall Soil Health Score">
           <div style={{ textAlign: 'center', marginBottom: 8 }}>
-            <span style={{ fontFamily: 'var(--font-display)', fontSize: 36, color: 'var(--status-good)' }}>78</span>
+            <span style={{ fontSize: 32, fontWeight: 700, color: 'var(--accent-primary)' }}>{overallScore}</span>
             <span style={{ fontSize: 14, color: 'var(--text-dim)', marginLeft: 4 }}>/ 100</span>
           </div>
           <ResponsiveContainer width="100%" height={220}>
             <RadarChart data={healthRadar}>
-              <PolarGrid stroke="rgba(0,212,255,0.1)" />
-              <PolarAngleAxis dataKey="property" tick={{ fill: 'rgba(180,200,230,0.6)', fontSize: 10 }} />
+              <PolarGrid stroke="#e2e0dc" />
+              <PolarAngleAxis dataKey="property" tick={{ fill: '#6b6b6b', fontSize: 11 }} />
               <PolarRadiusAxis tick={false} domain={[0, 100]} />
-              <Radar name="Health" dataKey="value" stroke="#00d4ff" fill="rgba(0,212,255,0.15)" strokeWidth={2} />
+              <Radar name="Health" dataKey="value" stroke="#3d7a4a" fill="rgba(61,122,74,0.12)" strokeWidth={2} />
             </RadarChart>
           </ResponsiveContainer>
         </HudPanel>
 
         {/* Soil Texture by Depth */}
-        <HudPanel title="Soil Texture by Depth" icon="▦">
+        <HudPanel title="Soil Texture by Depth">
           <ResponsiveContainer width="100%" height={280}>
             <BarChart data={textureData} layout="vertical">
-              <XAxis type="number" domain={[0, 100]} tick={{ fill: 'rgba(180,200,230,0.5)', fontSize: 10 }} axisLine={false} tickLine={false} />
-              <YAxis type="category" dataKey="layer" tick={{ fill: 'rgba(180,200,230,0.5)', fontSize: 10 }} axisLine={false} tickLine={false} width={60} />
+              <XAxis type="number" domain={[0, 100]} tick={{ fill: '#9a9a9a', fontSize: 11 }} axisLine={false} tickLine={false} />
+              <YAxis type="category" dataKey="layer" tick={{ fill: '#9a9a9a', fontSize: 11 }} axisLine={false} tickLine={false} width={70} />
               <Tooltip content={<CustomTooltip />} />
-              <Bar dataKey="clay" stackId="a" fill="rgba(255,51,85,0.5)" name="Clay" />
-              <Bar dataKey="silt" stackId="a" fill="rgba(0,212,255,0.4)" name="Silt" />
-              <Bar dataKey="sand" stackId="a" fill="rgba(255,170,0,0.4)" name="Sand" />
+              <Bar dataKey="clay" stackId="a" fill="#b5403a" name="Clay" radius={[0, 0, 0, 0]} />
+              <Bar dataKey="silt" stackId="a" fill="#4a7a8c" name="Silt" />
+              <Bar dataKey="sand" stackId="a" fill="#c0a030" name="Sand" />
             </BarChart>
           </ResponsiveContainer>
           <div style={{ display: 'flex', gap: 16, justifyContent: 'center', marginTop: 8 }}>
             {[
-              { label: 'Clay', color: 'rgba(255,51,85,0.5)' },
-              { label: 'Silt', color: 'rgba(0,212,255,0.4)' },
-              { label: 'Sand', color: 'rgba(255,170,0,0.4)' },
+              { label: 'Clay', color: '#b5403a' },
+              { label: 'Silt', color: '#4a7a8c' },
+              { label: 'Sand', color: '#c0a030' },
             ].map((l) => (
-              <div key={l.label} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, color: 'var(--text-dim)' }}>
+              <div key={l.label} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--text-dim)' }}>
                 <div style={{ width: 8, height: 8, borderRadius: 2, background: l.color }} />
                 {l.label}
               </div>
@@ -130,7 +160,7 @@ export default function SoilHealth() {
       </div>
 
       {/* Full Profile Table */}
-      <HudPanel title="Soil Profile Data" icon="◇">
+      <HudPanel title="Soil Profile Data">
         <table className="data-table">
           <thead>
             <tr>

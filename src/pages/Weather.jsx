@@ -6,26 +6,6 @@ import {
 import HudPanel from '../components/HudPanel';
 import MetricCard from '../components/MetricCard';
 
-const hourlyForecast = [
-  { time: '6AM', temp: 12, humidity: 82, wind: 8 },
-  { time: '9AM', temp: 16, humidity: 72, wind: 12 },
-  { time: '12PM', temp: 22, humidity: 58, wind: 15 },
-  { time: '3PM', temp: 25, humidity: 48, wind: 18 },
-  { time: '6PM', temp: 22, humidity: 55, wind: 14 },
-  { time: '9PM', temp: 17, humidity: 68, wind: 9 },
-  { time: '12AM', temp: 13, humidity: 78, wind: 6 },
-];
-
-const weeklyForecast = [
-  { day: 'Mon', high: 25, low: 12, rain: 0, condition: '☀️ Clear' },
-  { day: 'Tue', high: 27, low: 14, rain: 2, condition: '⛅ Partly Cloudy' },
-  { day: 'Wed', high: 22, low: 11, rain: 12, condition: '🌧️ Rain' },
-  { day: 'Thu', high: 20, low: 10, rain: 18, condition: '🌧️ Heavy Rain' },
-  { day: 'Fri', high: 23, low: 11, rain: 5, condition: '⛅ Showers' },
-  { day: 'Sat', high: 26, low: 13, rain: 0, condition: '☀️ Clear' },
-  { day: 'Sun', high: 28, low: 15, rain: 0, condition: '☀️ Clear' },
-];
-
 const monthlyClimate = [
   { month: 'Jan', tempAvg: 0, precip: 42 }, { month: 'Feb', tempAvg: 3, precip: 48 },
   { month: 'Mar', tempAvg: 9, precip: 68 }, { month: 'Apr', tempAvg: 14, precip: 95 },
@@ -39,10 +19,12 @@ const CustomTooltip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null;
   return (
     <div style={{
-      background: 'rgba(10,20,40,0.95)', border: '1px solid rgba(0,212,255,0.3)',
-      borderRadius: 4, padding: '8px 12px', fontSize: 11, fontFamily: 'var(--font-body)', color: '#e0eaff',
+      background: '#fff', border: '1px solid #e2e0dc',
+      borderRadius: 6, padding: '8px 12px', fontSize: 12,
+      fontFamily: 'var(--font-body)', color: '#2c2c2c',
+      boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
     }}>
-      <div style={{ color: 'rgba(0,212,255,0.7)', marginBottom: 4, fontWeight: 600 }}>{label}</div>
+      <div style={{ color: '#6b6b6b', marginBottom: 4, fontWeight: 600 }}>{label}</div>
       {payload.map((p, i) => (
         <div key={i} style={{ color: p.color }}>{p.name}: {p.value}</div>
       ))}
@@ -50,76 +32,150 @@ const CustomTooltip = ({ active, payload, label }) => {
   );
 };
 
+const conditionLabel = (code) => {
+  if (code <= 1) return 'Clear';
+  if (code <= 3) return 'Partly Cloudy';
+  if (code <= 48) return 'Foggy';
+  if (code <= 67) return 'Rain';
+  if (code <= 77) return 'Snow';
+  if (code <= 82) return 'Showers';
+  if (code <= 86) return 'Snow Showers';
+  return 'Thunderstorm';
+};
+
 export default function Weather() {
   const [lat, setLat] = useState('38.94');
   const [lon, setLon] = useState('-92.31');
   const [loading, setLoading] = useState(false);
+  const [hourlyData, setHourlyData] = useState([]);
+  const [dailyData, setDailyData] = useState([]);
+  const [summary, setSummary] = useState({});
+
+  useEffect(() => {
+    fetchWeather();
+  }, []);
+
+  const fetchWeather = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/weather/forecast?lat=${lat}&lon=${lon}&days=7`);
+      if (res.ok) {
+        const data = await res.json();
+        // Parse hourly data (first 24 entries for today)
+        if (data.hourly && data.hourly.time) {
+          const hours = data.hourly.time.slice(0, 7).map((t, i) => {
+            const d = new Date(t);
+            const hour = d.getHours();
+            const label = hour === 0 ? '12AM' : hour < 12 ? `${hour}AM` : hour === 12 ? '12PM' : `${hour - 12}PM`;
+            return {
+              time: label,
+              temp: Math.round(data.hourly.temperature_2m[i] || 0),
+              humidity: Math.round(data.hourly.relativehumidity_2m?.[i] || 0),
+              wind: Math.round(data.hourly.windspeed_10m?.[i] || 0),
+            };
+          });
+          setHourlyData(hours);
+        }
+        // Parse daily data
+        if (data.daily && data.daily.time) {
+          const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+          const daily = data.daily.time.map((t, i) => ({
+            day: days[new Date(t).getDay()],
+            high: Math.round(data.daily.temperature_2m_max[i]),
+            low: Math.round(data.daily.temperature_2m_min[i]),
+            rain: Math.round((data.daily.precipitation_sum[i] || 0) * 10) / 10,
+            condition: conditionLabel(data.daily.weathercode?.[i] || 0),
+          }));
+          setDailyData(daily);
+
+          // Summary metrics
+          const todayHigh = data.daily.temperature_2m_max[0];
+          const todayLow = data.daily.temperature_2m_min[0];
+          const totalRain = data.daily.precipitation_sum.reduce((a, b) => a + (b || 0), 0);
+          const et0 = data.daily.et0_fao_evapotranspiration?.[0] || 0;
+          setSummary({
+            tempHigh: Math.round(todayHigh),
+            tempLow: Math.round(todayLow),
+            rain7d: Math.round(totalRain * 10) / 10,
+            et0: Math.round(et0 * 10) / 10,
+          });
+        }
+      }
+    } catch {
+      // Fallback remains empty - UI shows "no data"
+    }
+    setLoading(false);
+  };
 
   return (
     <div className="fade-in">
-      <div className="page-title">
-        <span className="title-icon">☁</span> Weather Intelligence
-      </div>
+      <div className="page-title">Weather Intelligence</div>
       <p className="page-subtitle">
-        Forecast, historical climate, and agricultural weather indices — powered by Open-Meteo
+        Forecast, historical climate, and agricultural weather indices -- powered by Open-Meteo
       </p>
 
+      <div className="location-bar">
+        <label>Location:</label>
+        <input type="text" value={lat} onChange={(e) => setLat(e.target.value)} placeholder="Latitude" />
+        <input type="text" value={lon} onChange={(e) => setLon(e.target.value)} placeholder="Longitude" />
+        <button className="btn btn-primary" onClick={fetchWeather} style={{ padding: '5px 12px', fontSize: 11 }}>
+          {loading ? 'Loading...' : 'Update'}
+        </button>
+      </div>
+
       <div className="metric-grid" style={{ marginBottom: 18 }}>
-        <MetricCard label="Temperature" value="25" unit="°C" icon="☀" change="High: 27°C · Low: 12°C" changeType="neutral" />
-        <MetricCard label="Precipitation (7d)" value="37" unit="mm" icon="☁" change="Below seasonal avg" changeType="negative" />
-        <MetricCard label="Wind Speed" value="15" unit="km/h" icon="≋" change="SW direction" changeType="neutral" />
-        <MetricCard label="Humidity" value="48" unit="%" icon="◉" change="Good for field work" changeType="positive" />
-        <MetricCard label="ET₀ (Today)" value="4.7" unit="mm" icon="▲" change="High evapotranspiration" changeType="negative" />
-        <MetricCard label="Frost Risk" value="None" icon="❄" change="Min 10°C next 7 days" changeType="positive" />
+        <MetricCard label="Temperature" value={summary.tempHigh || '--'} unit="C" change={`High: ${summary.tempHigh || '--'}C / Low: ${summary.tempLow || '--'}C`} changeType="neutral" />
+        <MetricCard label="Precipitation (7d)" value={summary.rain7d || '--'} unit="mm" change="Total 7-day rainfall" changeType="neutral" />
+        <MetricCard label="ET0 (Today)" value={summary.et0 || '--'} unit="mm" change="Evapotranspiration" changeType="neutral" />
       </div>
 
       <div className="grid-2" style={{ marginBottom: 18 }}>
-        <HudPanel title="Today — Hourly Temperature" icon="☀">
+        <HudPanel title="Today -- Hourly Temperature">
           <ResponsiveContainer width="100%" height={200}>
-            <AreaChart data={hourlyForecast}>
+            <AreaChart data={hourlyData}>
               <defs>
                 <linearGradient id="tempGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#ffaa00" stopOpacity={0.3} />
-                  <stop offset="100%" stopColor="#ffaa00" stopOpacity={0} />
+                  <stop offset="0%" stopColor="#c0a030" stopOpacity={0.2} />
+                  <stop offset="100%" stopColor="#c0a030" stopOpacity={0} />
                 </linearGradient>
               </defs>
-              <XAxis dataKey="time" tick={{ fill: 'rgba(180,200,230,0.5)', fontSize: 10 }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fill: 'rgba(180,200,230,0.5)', fontSize: 10 }} axisLine={false} tickLine={false} />
+              <XAxis dataKey="time" tick={{ fill: '#9a9a9a', fontSize: 11 }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fill: '#9a9a9a', fontSize: 11 }} axisLine={false} tickLine={false} />
               <Tooltip content={<CustomTooltip />} />
-              <Area type="monotone" dataKey="temp" stroke="#ffaa00" strokeWidth={2} fill="url(#tempGrad)" name="Temp °C" />
+              <Area type="monotone" dataKey="temp" stroke="#c0a030" strokeWidth={2} fill="url(#tempGrad)" name="Temp C" />
             </AreaChart>
           </ResponsiveContainer>
         </HudPanel>
 
-        <HudPanel title="Humidity & Wind" icon="≋">
+        <HudPanel title="Humidity and Wind">
           <ResponsiveContainer width="100%" height={200}>
-            <LineChart data={hourlyForecast}>
-              <XAxis dataKey="time" tick={{ fill: 'rgba(180,200,230,0.5)', fontSize: 10 }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fill: 'rgba(180,200,230,0.5)', fontSize: 10 }} axisLine={false} tickLine={false} />
+            <LineChart data={hourlyData}>
+              <XAxis dataKey="time" tick={{ fill: '#9a9a9a', fontSize: 11 }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fill: '#9a9a9a', fontSize: 11 }} axisLine={false} tickLine={false} />
               <Tooltip content={<CustomTooltip />} />
-              <Line type="monotone" dataKey="humidity" stroke="#00d4ff" strokeWidth={2} dot={{ r: 3 }} name="Humidity %" />
-              <Line type="monotone" dataKey="wind" stroke="#00ff88" strokeWidth={2} dot={{ r: 3 }} name="Wind km/h" />
+              <Line type="monotone" dataKey="humidity" stroke="#4a7a8c" strokeWidth={2} dot={{ r: 3 }} name="Humidity %" />
+              <Line type="monotone" dataKey="wind" stroke="#3d7a4a" strokeWidth={2} dot={{ r: 3 }} name="Wind km/h" />
             </LineChart>
           </ResponsiveContainer>
         </HudPanel>
       </div>
 
       {/* 7-Day Forecast */}
-      <HudPanel title="7-Day Forecast" icon="☁" className="mb-2">
+      <HudPanel title="7-Day Forecast" className="mb-2">
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 8 }}>
-          {weeklyForecast.map((d) => (
+          {dailyData.map((d) => (
             <div key={d.day} style={{
-              background: 'rgba(0,0,0,0.2)', borderRadius: 6, padding: '12px 8px',
-              textAlign: 'center', border: '1px solid rgba(0,212,255,0.08)',
+              background: '#fafaf8', borderRadius: 8, padding: '14px 8px',
+              textAlign: 'center', border: '1px solid #e2e0dc',
             }}>
-              <div style={{ fontFamily: 'var(--font-heading)', fontSize: 12, fontWeight: 600, marginBottom: 6 }}>{d.day}</div>
-              <div style={{ fontSize: 20, marginBottom: 6 }}>{d.condition.split(' ')[0]}</div>
-              <div style={{ fontFamily: 'var(--font-display)', fontSize: 16, color: 'var(--text-primary)' }}>
-                {d.high}°
+              <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6, color: '#2c2c2c' }}>{d.day}</div>
+              <div style={{ fontSize: 11, color: '#6b6b6b', marginBottom: 6 }}>{d.condition}</div>
+              <div style={{ fontSize: 18, fontWeight: 700, color: '#2c2c2c' }}>
+                {d.high}C
               </div>
-              <div style={{ fontSize: 10, color: 'var(--text-dim)' }}>{d.low}°</div>
+              <div style={{ fontSize: 11, color: '#9a9a9a' }}>{d.low}C</div>
               {d.rain > 0 && (
-                <div style={{ fontSize: 10, color: 'var(--accent-primary)', marginTop: 4 }}>
+                <div style={{ fontSize: 11, color: '#4a7a8c', marginTop: 4 }}>
                   {d.rain}mm
                 </div>
               )}
@@ -129,15 +185,15 @@ export default function Weather() {
       </HudPanel>
 
       {/* Climate Normals */}
-      <HudPanel title="Monthly Climate Normals" icon="◈">
+      <HudPanel title="Monthly Climate Normals">
         <ResponsiveContainer width="100%" height={220}>
           <ComposedChart data={monthlyClimate}>
-            <XAxis dataKey="month" tick={{ fill: 'rgba(180,200,230,0.5)', fontSize: 10 }} axisLine={false} tickLine={false} />
-            <YAxis yAxisId="temp" tick={{ fill: 'rgba(180,200,230,0.5)', fontSize: 10 }} axisLine={false} tickLine={false} />
-            <YAxis yAxisId="precip" orientation="right" tick={{ fill: 'rgba(180,200,230,0.5)', fontSize: 10 }} axisLine={false} tickLine={false} />
+            <XAxis dataKey="month" tick={{ fill: '#9a9a9a', fontSize: 11 }} axisLine={false} tickLine={false} />
+            <YAxis yAxisId="temp" tick={{ fill: '#9a9a9a', fontSize: 11 }} axisLine={false} tickLine={false} />
+            <YAxis yAxisId="precip" orientation="right" tick={{ fill: '#9a9a9a', fontSize: 11 }} axisLine={false} tickLine={false} />
             <Tooltip content={<CustomTooltip />} />
-            <Bar yAxisId="precip" dataKey="precip" fill="rgba(0,212,255,0.3)" radius={[3, 3, 0, 0]} name="Precip mm" />
-            <Line yAxisId="temp" type="monotone" dataKey="tempAvg" stroke="#ffaa00" strokeWidth={2} dot={{ r: 3 }} name="Avg Temp °C" />
+            <Bar yAxisId="precip" dataKey="precip" fill="rgba(74,122,140,0.25)" radius={[4, 4, 0, 0]} name="Precip mm" />
+            <Line yAxisId="temp" type="monotone" dataKey="tempAvg" stroke="#c0a030" strokeWidth={2} dot={{ r: 3 }} name="Avg Temp C" />
           </ComposedChart>
         </ResponsiveContainer>
       </HudPanel>
