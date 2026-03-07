@@ -639,6 +639,47 @@ textarea.input-field {
   color: var(--accent-primary) !important;
 }
 
+/* Draw control styling — more visible on satellite imagery */
+.leaflet-draw-toolbar a {
+  background-color: rgba(255, 255, 255, 0.95) !important;
+  border-color: var(--border-color) !important;
+  border-radius: 4px !important;
+}
+
+.leaflet-draw-toolbar a:hover {
+  background-color: #fff !important;
+  border-color: var(--accent-primary) !important;
+}
+
+.leaflet-draw-actions a {
+  background-color: var(--accent-primary) !important;
+  color: #fff !important;
+  border-radius: 3px !important;
+  font-family: var(--font-body) !important;
+  font-size: 11px !important;
+}
+
+.leaflet-draw-actions a:hover {
+  background-color: var(--accent-secondary) !important;
+}
+
+/* Field tooltip on map */
+.field-tooltip-custom {
+  background: rgba(255, 255, 255, 0.95) !important;
+  border: 1px solid var(--border-color) !important;
+  border-radius: 6px !important;
+  padding: 6px 10px !important;
+  font-family: var(--font-body) !important;
+  font-size: 11px !important;
+  color: var(--text-primary) !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15) !important;
+  line-height: 1.4 !important;
+}
+
+.field-tooltip-custom::before {
+  border-top-color: rgba(255, 255, 255, 0.95) !important;
+}
+
 /* ─── Loading / Spinner ─────────────────────────────────────── */
 .loading-spinner {
   display: inline-block;
@@ -777,6 +818,7 @@ textarea.input-field {
 .text-center { text-align: center; }
 .mt-1 { margin-top: 8px; }
 .mt-2 { margin-top: 16px; }
+.mt-3 { margin-top: 24px; }
 .mb-1 { margin-bottom: 8px; }
 .mb-2 { margin-bottom: 16px; }
 .gap-1 { gap: 8px; }

@@ -14,6 +14,38 @@ const FIELD_COLORS = ['#3d7a4a', '#7ab87f', '#c0a030', '#4a7a8c', '#8a6a3a', '#b
 const CURRENT_YEAR = new Date().getFullYear();
 const YEARS = [CURRENT_YEAR - 2, CURRENT_YEAR - 1, CURRENT_YEAR];
 
+const GEOCODE_CACHE_KEY = 'ohdeere_geocode_cache';
+
+function getGeocodeCache() {
+  try { return JSON.parse(localStorage.getItem(GEOCODE_CACHE_KEY) || '{}'); }
+  catch { return {}; }
+}
+function setGeocodeCache(cache) {
+  localStorage.setItem(GEOCODE_CACHE_KEY, JSON.stringify(cache));
+}
+
+async function reverseGeocode(lat, lon) {
+  const key = `${lat.toFixed(3)},${lon.toFixed(3)}`;
+  const cache = getGeocodeCache();
+  if (cache[key]) return cache[key];
+  try {
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&zoom=10`,
+      { headers: { 'User-Agent': 'OhDeere/1.0' } }
+    );
+    const data = await res.json();
+    const addr = data.address || {};
+    const town = addr.city || addr.town || addr.village || addr.hamlet || addr.county || '';
+    const state = addr.state || '';
+    const label = [town, state].filter(Boolean).join(', ');
+    cache[key] = label || `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
+    setGeocodeCache(cache);
+    return cache[key];
+  } catch {
+    return `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
+  }
+}
+
 export default function Onboarding() {
   const navigate = useNavigate();
   const [step, setStep] = useState(1);
@@ -24,6 +56,7 @@ export default function Onboarding() {
   const [cropZones, setCropZones] = useState([{ zone_name: 'Main Plot', crops_by_year: {} }]);
   const [selectedFertilizers, setSelectedFertilizers] = useState([]);
   const [saving, setSaving] = useState(false);
+  const [townNames, setTownNames] = useState({});
 
   const mapRef = useRef(null);
   const mapInstance = useRef(null);
@@ -57,6 +90,17 @@ export default function Onboarding() {
     return () => window.removeEventListener('ohdeere-fields-changed', loadFields);
   }, []);
 
+  // Reverse geocode town names
+  useEffect(() => {
+    fields.forEach((f) => {
+      if (f.lat && f.lon && !townNames[f.id]) {
+        reverseGeocode(f.lat, f.lon).then((name) => {
+          setTownNames((prev) => ({ ...prev, [f.id]: name }));
+        });
+      }
+    });
+  }, [fields]);
+
   // Initialize map for Step 1
   useEffect(() => {
     if (step !== 1 || !mapRef.current || mapInstance.current) return;
@@ -85,10 +129,10 @@ export default function Onboarding() {
         polygon: {
           allowIntersection: false,
           showArea: true,
-          shapeOptions: { color: '#3d7a4a', weight: 2, fillOpacity: 0.15 },
+          shapeOptions: { color: '#ffffff', weight: 3, fillOpacity: 0.2, fillColor: '#3d7a4a' },
         },
         rectangle: {
-          shapeOptions: { color: '#3d7a4a', weight: 2, fillOpacity: 0.15 },
+          shapeOptions: { color: '#ffffff', weight: 3, fillOpacity: 0.2, fillColor: '#3d7a4a' },
         },
         polyline: false, circle: false, circlemarker: false, marker: false,
       },
@@ -136,18 +180,25 @@ export default function Onboarding() {
 
     fields.forEach((field) => {
       if (!field.coords || field.coords.length < 3) return;
+      const isSelected = selectedFieldId === field.id;
       const polygon = L.polygon(field.coords, {
-        color: field.color || '#3d7a4a',
-        weight: selectedFieldId === field.id ? 3 : 2,
+        color: isSelected ? '#ffffff' : (field.color || '#3d7a4a'),
+        weight: isSelected ? 4 : 3,
         fillColor: field.color || '#3d7a4a',
-        fillOpacity: selectedFieldId === field.id ? 0.3 : 0.15,
+        fillOpacity: isSelected ? 0.35 : 0.2,
+        dashArray: isSelected ? null : '8 4',
+        opacity: isSelected ? 1 : 0.85,
       }).addTo(map);
 
-      polygon.bindTooltip(field.name, { direction: 'center', permanent: false });
+      const townLabel = townNames[field.id] ? ` (${townNames[field.id]})` : '';
+      polygon.bindTooltip(
+        `<strong>${field.name}</strong><br/>${field.acres} ac${townLabel}`,
+        { className: 'field-tooltip-custom', direction: 'center', permanent: false }
+      );
       polygon.on('click', () => setSelectedFieldId(field.id));
       fieldPolygonsRef.current[field.id] = polygon;
     });
-  }, [fields, selectedFieldId]);
+  }, [fields, selectedFieldId, townNames]);
 
   // Load existing profile when field selected
   useEffect(() => {
@@ -275,9 +326,9 @@ export default function Onboarding() {
 
           {fields.length > 0 && (
             <HudPanel title="Your Fields" className="mt-3">
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {fields.map((f) => (
-                  <button
+                  <div
                     key={f.id}
                     onClick={() => {
                       setSelectedFieldId(f.id);
@@ -286,22 +337,34 @@ export default function Onboarding() {
                       }
                     }}
                     style={{
-                      display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px',
-                      background: selectedFieldId === f.id ? 'rgba(61,122,74,0.08)' : 'transparent',
-                      border: `1px solid ${selectedFieldId === f.id ? 'var(--accent-primary)' : 'var(--border-color)'}`,
-                      borderRadius: 6, cursor: 'pointer', textAlign: 'left',
+                      display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px',
+                      background: selectedFieldId === f.id ? 'rgba(61,122,74,0.06)' : 'var(--bg-panel)',
+                      border: `2px solid ${selectedFieldId === f.id ? 'var(--accent-primary)' : 'var(--border-color)'}`,
+                      borderRadius: 8, cursor: 'pointer',
                       color: 'var(--text-primary)', fontFamily: 'inherit',
+                      transition: 'all 0.15s ease',
                     }}
                   >
-                    <div style={{ width: 10, height: 10, borderRadius: 2, background: f.color, flexShrink: 0 }} />
+                    <div style={{
+                      width: 14, height: 14, borderRadius: 4, background: f.color, flexShrink: 0,
+                      border: '2px solid rgba(255,255,255,0.3)', boxShadow: '0 1px 3px rgba(0,0,0,0.15)',
+                    }} />
                     <div style={{ flex: 1 }}>
                       <div style={{ fontSize: 13, fontWeight: 600 }}>{f.name}</div>
-                      <div style={{ fontSize: 11, color: 'var(--text-dim)' }}>{f.acres} acres</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 1 }}>
+                        {f.acres} ac{townNames[f.id] ? ` · ${townNames[f.id]}` : ''}
+                      </div>
                     </div>
                     {selectedFieldId === f.id && (
-                      <span style={{ fontSize: 11, color: 'var(--accent-primary)', fontWeight: 600 }}>Selected</span>
+                      <span style={{
+                        fontSize: 10, color: '#fff', fontWeight: 600,
+                        background: 'var(--accent-primary)', padding: '3px 8px',
+                        borderRadius: 4,
+                      }}>
+                        Selected
+                      </span>
                     )}
-                  </button>
+                  </div>
                 ))}
               </div>
             </HudPanel>

@@ -13,6 +13,38 @@ const STREET_ATTR = '&copy; OpenStreetMap contributors';
 
 const FIELD_COLORS = ['#3d7a4a', '#7ab87f', '#c0a030', '#4a7a8c', '#8a6a3a', '#b5403a', '#6b4a8c'];
 
+const GEOCODE_CACHE_KEY = 'ohdeere_geocode_cache';
+
+function getGeocodeCache() {
+  try { return JSON.parse(localStorage.getItem(GEOCODE_CACHE_KEY) || '{}'); }
+  catch { return {}; }
+}
+function setGeocodeCache(cache) {
+  localStorage.setItem(GEOCODE_CACHE_KEY, JSON.stringify(cache));
+}
+
+async function reverseGeocode(lat, lon) {
+  const key = `${lat.toFixed(3)},${lon.toFixed(3)}`;
+  const cache = getGeocodeCache();
+  if (cache[key]) return cache[key];
+  try {
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&zoom=10`,
+      { headers: { 'User-Agent': 'OhDeere/1.0' } }
+    );
+    const data = await res.json();
+    const addr = data.address || {};
+    const town = addr.city || addr.town || addr.village || addr.hamlet || addr.county || '';
+    const state = addr.state || '';
+    const label = [town, state].filter(Boolean).join(', ');
+    cache[key] = label || `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
+    setGeocodeCache(cache);
+    return cache[key];
+  } catch {
+    return `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
+  }
+}
+
 export default function FieldMap() {
   const mapRef = useRef(null);
   const mapInstance = useRef(null);
@@ -31,6 +63,8 @@ export default function FieldMap() {
   const [satStatus, setSatStatus] = useState(null);
   const [editingName, setEditingName] = useState(null);
   const [nameInput, setNameInput] = useState('');
+  const [deleteConfirm, setDeleteConfirm] = useState(null);
+  const [townNames, setTownNames] = useState({});
 
   const loadFields = useCallback(() => {
     setFields(getFields());
@@ -42,6 +76,17 @@ export default function FieldMap() {
     window.addEventListener('ohdeere-fields-changed', handler);
     return () => window.removeEventListener('ohdeere-fields-changed', handler);
   }, [loadFields]);
+
+  // Reverse geocode town names for all fields
+  useEffect(() => {
+    fields.forEach((f) => {
+      if (f.lat && f.lon && !townNames[f.id]) {
+        reverseGeocode(f.lat, f.lon).then((name) => {
+          setTownNames((prev) => ({ ...prev, [f.id]: name }));
+        });
+      }
+    });
+  }, [fields]);
 
   // Check satellite service status on mount
   useEffect(() => {
@@ -70,22 +115,20 @@ export default function FieldMap() {
     }).addTo(map);
     layerRef.current = layer;
 
-    // Drawing layer
     const drawnItems = new L.FeatureGroup();
     map.addLayer(drawnItems);
     drawnLayersRef.current = drawnItems;
 
-    // Draw control
     const drawControl = new L.Control.Draw({
       position: 'topleft',
       draw: {
         polygon: {
           allowIntersection: false,
           showArea: true,
-          shapeOptions: { color: '#3d7a4a', weight: 2, fillOpacity: 0.15 },
+          shapeOptions: { color: '#ffffff', weight: 3, fillOpacity: 0.2, fillColor: '#3d7a4a' },
         },
         rectangle: {
-          shapeOptions: { color: '#3d7a4a', weight: 2, fillOpacity: 0.15 },
+          shapeOptions: { color: '#ffffff', weight: 3, fillOpacity: 0.2, fillColor: '#3d7a4a' },
         },
         polyline: false,
         circle: false,
@@ -100,7 +143,6 @@ export default function FieldMap() {
     map.addControl(drawControl);
     drawControlRef.current = drawControl;
 
-    // Handle new shape drawn
     map.on(L.Draw.Event.CREATED, (e) => {
       const layer = e.layer;
       const rawCoords = layer.getLatLngs()[0].map((ll) => [ll.lat, ll.lng]);
@@ -133,31 +175,32 @@ export default function FieldMap() {
     };
   }, []);
 
-  // Render field polygons on map when fields change
+  // Render field polygons with improved visibility
   useEffect(() => {
     if (!mapInstance.current || !mapReady) return;
     const L = window.L;
     const map = mapInstance.current;
 
-    // Remove old polygons
     Object.values(fieldPolygonsRef.current).forEach((p) => map.removeLayer(p));
     fieldPolygonsRef.current = {};
 
     fields.forEach((field) => {
       if (!field.coords || field.coords.length < 3) return;
+      const isSelected = selectedField?.id === field.id;
       const polygon = L.polygon(field.coords, {
-        color: field.color || '#3d7a4a',
-        weight: 2,
+        color: isSelected ? '#ffffff' : (field.color || '#3d7a4a'),
+        weight: isSelected ? 4 : 3,
         fillColor: field.color || '#3d7a4a',
-        fillOpacity: selectedField?.id === field.id ? 0.3 : 0.15,
-        dashArray: selectedField?.id === field.id ? null : '5 5',
+        fillOpacity: isSelected ? 0.35 : 0.2,
+        dashArray: isSelected ? null : '8 4',
+        opacity: isSelected ? 1 : 0.85,
       }).addTo(map);
 
-      polygon.bindTooltip(field.name, {
-        className: 'field-tooltip',
-        direction: 'center',
-        permanent: false,
-      });
+      const townLabel = townNames[field.id] ? ` (${townNames[field.id]})` : '';
+      polygon.bindTooltip(
+        `<strong>${field.name}</strong><br/>${field.acres} ac${townLabel}`,
+        { className: 'field-tooltip-custom', direction: 'center', permanent: false }
+      );
 
       polygon.on('click', () => {
         setSelectedField(field);
@@ -166,7 +209,7 @@ export default function FieldMap() {
 
       fieldPolygonsRef.current[field.id] = polygon;
     });
-  }, [fields, selectedField, mapReady]);
+  }, [fields, selectedField, mapReady, townNames]);
 
   const fetchFieldData = async (field) => {
     if (!field) return;
@@ -174,33 +217,24 @@ export default function FieldMap() {
     const newErrors = {};
     const newData = {};
 
-    // Fetch soil data
     try {
       const soilRes = await fetch(`/api/soil/properties?lat=${field.lat}&lon=${field.lon}`);
       if (!soilRes.ok) {
         const err = await soilRes.json().catch(() => ({}));
         throw new Error(err.detail || `HTTP ${soilRes.status}`);
       }
-      const soilData = await soilRes.json();
-      newData.soil = soilData;
-    } catch (e) {
-      newErrors.soil = e.message;
-    }
+      newData.soil = await soilRes.json();
+    } catch (e) { newErrors.soil = e.message; }
 
-    // Fetch weather data
     try {
       const wxRes = await fetch(`/api/weather/forecast?lat=${field.lat}&lon=${field.lon}&days=3`);
       if (!wxRes.ok) {
         const err = await wxRes.json().catch(() => ({}));
         throw new Error(err.detail || `HTTP ${wxRes.status}`);
       }
-      const wxData = await wxRes.json();
-      newData.weather = wxData;
-    } catch (e) {
-      newErrors.weather = e.message;
-    }
+      newData.weather = await wxRes.json();
+    } catch (e) { newErrors.weather = e.message; }
 
-    // Fetch NDVI data
     try {
       const ndviRes = await fetch('/api/satellite/ndvi?' + new URLSearchParams({
         start_date: new Date(Date.now() - 90 * 86400000).toISOString().split('T')[0],
@@ -208,20 +242,14 @@ export default function FieldMap() {
       }), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          coordinates: field.coords,
-          name: field.name,
-        }),
+        body: JSON.stringify({ coordinates: field.coords, name: field.name }),
       });
       if (!ndviRes.ok) {
         const err = await ndviRes.json().catch(() => ({}));
         throw new Error(err.detail || `HTTP ${ndviRes.status}`);
       }
-      const ndviData = await ndviRes.json();
-      newData.ndvi = ndviData;
-    } catch (e) {
-      newErrors.ndvi = e.message;
-    }
+      newData.ndvi = await ndviRes.json();
+    } catch (e) { newErrors.ndvi = e.message; }
 
     setFieldData((prev) => ({ ...prev, [field.id]: newData }));
     setErrors((prev) => ({ ...prev, [field.id]: newErrors }));
@@ -243,15 +271,29 @@ export default function FieldMap() {
     deleteField(id);
     if (selectedField?.id === id) setSelectedField(null);
     setFields(getFields());
+    setDeleteConfirm(null);
   };
 
-  const handleRenameField = (id) => {
-    updateField(id, { name: nameInput });
-    setEditingName(null);
-    setFields(getFields());
-    if (selectedField?.id === id) {
-      setSelectedField({ ...selectedField, name: nameInput });
+  const startRename = (e, field) => {
+    e.stopPropagation();
+    setEditingName(field.id);
+    setNameInput(field.name);
+  };
+
+  const commitRename = (id) => {
+    const trimmed = nameInput.trim();
+    if (trimmed) {
+      updateField(id, { name: trimmed });
+      setFields(getFields());
+      if (selectedField?.id === id) {
+        setSelectedField((prev) => ({ ...prev, name: trimmed }));
+      }
     }
+    setEditingName(null);
+  };
+
+  const cancelRename = () => {
+    setEditingName(null);
   };
 
   const data = selectedField ? fieldData[selectedField.id] || {} : {};
@@ -298,62 +340,157 @@ export default function FieldMap() {
                 No fields defined yet. Use the drawing tools on the map to draw your field boundaries.
               </div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                {fields.map((f) => (
-                  <div key={f.id} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <button
-                      onClick={() => {
-                        setSelectedField(f);
-                        fetchFieldData(f);
-                        if (mapInstance.current && f.coords) {
-                          mapInstance.current.fitBounds(f.coords, { padding: [30, 30] });
-                        }
-                      }}
-                      style={{
-                        display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', flex: 1,
-                        background: selectedField?.id === f.id ? 'rgba(61,122,74,0.08)' : 'transparent',
-                        border: `1px solid ${selectedField?.id === f.id ? 'rgba(61,122,74,0.2)' : 'transparent'}`,
-                        borderRadius: 4, cursor: 'pointer', textAlign: 'left',
-                        color: 'var(--text-primary)', fontFamily: 'inherit',
-                      }}
-                    >
-                      <div style={{ width: 10, height: 10, borderRadius: 2, background: f.color, flexShrink: 0 }} />
-                      <div style={{ flex: 1 }}>
-                        {editingName === f.id ? (
-                          <input
-                            type="text"
-                            value={nameInput}
-                            onChange={(e) => setNameInput(e.target.value)}
-                            onKeyDown={(e) => e.key === 'Enter' && handleRenameField(f.id)}
-                            onBlur={() => handleRenameField(f.id)}
-                            autoFocus
-                            style={{ fontSize: 12, fontWeight: 500, border: '1px solid #ccc', borderRadius: 3, padding: '2px 4px', width: '100%' }}
-                            onClick={(e) => e.stopPropagation()}
-                          />
-                        ) : (
-                          <div style={{ fontSize: 12, fontWeight: 500 }}>{f.name}</div>
-                        )}
-                        <div style={{ fontSize: 10, color: 'var(--text-dim)' }}>
-                          {f.acres} acres {f.crop ? `-- ${f.crop}` : ''}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {fields.map((f) => {
+                  const isSelected = selectedField?.id === f.id;
+                  const isEditing = editingName === f.id;
+                  const isDeleting = deleteConfirm === f.id;
+
+                  return (
+                    <div key={f.id} style={{
+                      borderRadius: 8,
+                      border: `2px solid ${isSelected ? 'var(--accent-primary)' : 'var(--border-color)'}`,
+                      background: isSelected ? 'rgba(61,122,74,0.06)' : 'var(--bg-panel)',
+                      overflow: 'hidden',
+                      transition: 'all 0.15s ease',
+                    }}>
+                      {/* Main row */}
+                      <div
+                        onClick={() => {
+                          if (isEditing) return;
+                          setSelectedField(f);
+                          fetchFieldData(f);
+                          if (mapInstance.current && f.coords) {
+                            mapInstance.current.fitBounds(f.coords, { padding: [30, 30] });
+                          }
+                        }}
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px',
+                          cursor: isEditing ? 'default' : 'pointer',
+                        }}
+                      >
+                        <div style={{
+                          width: 14, height: 14, borderRadius: 4,
+                          background: f.color, flexShrink: 0,
+                          border: '2px solid rgba(255,255,255,0.3)',
+                          boxShadow: '0 1px 3px rgba(0,0,0,0.15)',
+                        }} />
+
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          {isEditing ? (
+                            <input
+                              type="text"
+                              value={nameInput}
+                              onChange={(e) => setNameInput(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') commitRename(f.id);
+                                if (e.key === 'Escape') cancelRename();
+                              }}
+                              onBlur={() => commitRename(f.id)}
+                              autoFocus
+                              className="input-field"
+                              style={{
+                                fontSize: 12, fontWeight: 600, padding: '4px 8px',
+                                width: '100%', background: '#fff',
+                              }}
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                          ) : (
+                            <>
+                              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
+                                {f.name}
+                              </div>
+                              <div style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 1 }}>
+                                {f.acres} ac{townNames[f.id] ? ` · ${townNames[f.id]}` : ''}
+                              </div>
+                            </>
+                          )}
                         </div>
+
+                        {!isEditing && (
+                          <div style={{ display: 'flex', gap: 2, flexShrink: 0 }}>
+                            <button
+                              onClick={(e) => startRename(e, f)}
+                              title="Rename field"
+                              className="field-action-btn"
+                              style={{
+                                width: 28, height: 28, borderRadius: 6,
+                                border: '1px solid var(--border-color)',
+                                background: 'var(--bg-secondary)', cursor: 'pointer',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                fontSize: 12, color: 'var(--text-secondary)',
+                                transition: 'all 0.15s ease',
+                              }}
+                              onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--accent-primary)'; e.currentTarget.style.color = 'var(--accent-primary)'; }}
+                              onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border-color)'; e.currentTarget.style.color = 'var(--text-secondary)'; }}
+                            >
+                              <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M11 1.5l3.5 3.5L5 14.5H1.5V11z"/>
+                              </svg>
+                            </button>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); setDeleteConfirm(f.id); }}
+                              title="Delete field"
+                              className="field-action-btn"
+                              style={{
+                                width: 28, height: 28, borderRadius: 6,
+                                border: '1px solid var(--border-color)',
+                                background: 'var(--bg-secondary)', cursor: 'pointer',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                fontSize: 12, color: 'var(--text-secondary)',
+                                transition: 'all 0.15s ease',
+                              }}
+                              onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--status-danger)'; e.currentTarget.style.color = 'var(--status-danger)'; }}
+                              onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border-color)'; e.currentTarget.style.color = 'var(--text-secondary)'; }}
+                            >
+                              <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M2 4h12M5.33 4V2.67a1.33 1.33 0 011.34-1.34h2.66a1.33 1.33 0 011.34 1.34V4m2 0v9.33a1.33 1.33 0 01-1.34 1.34H4.67a1.33 1.33 0 01-1.34-1.34V4h9.34z"/>
+                              </svg>
+                            </button>
+                          </div>
+                        )}
                       </div>
-                    </button>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); setEditingName(f.id); setNameInput(f.name); }}
-                      title="Rename"
-                      style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 12, padding: '4px', color: 'var(--text-dim)' }}
-                    >
-                      E
-                    </button>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); handleDeleteField(f.id); }}
-                      title="Delete field"
-                      style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 12, padding: '4px', color: 'var(--status-danger)' }}
-                    >
-                      X
-                    </button>
-                  </div>
-                ))}
+
+                      {/* Delete confirmation bar */}
+                      {isDeleting && (
+                        <div style={{
+                          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                          padding: '8px 12px',
+                          background: 'rgba(181,64,58,0.06)',
+                          borderTop: '1px solid rgba(181,64,58,0.12)',
+                        }}>
+                          <span style={{ fontSize: 11, color: 'var(--status-danger)', fontWeight: 500 }}>
+                            Delete this field?
+                          </span>
+                          <div style={{ display: 'flex', gap: 6 }}>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); setDeleteConfirm(null); }}
+                              style={{
+                                padding: '4px 12px', fontSize: 11, fontWeight: 500,
+                                background: 'var(--bg-panel)', border: '1px solid var(--border-color)',
+                                borderRadius: 4, cursor: 'pointer', color: 'var(--text-secondary)',
+                                fontFamily: 'inherit',
+                              }}
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleDeleteField(f.id); }}
+                              style={{
+                                padding: '4px 12px', fontSize: 11, fontWeight: 600,
+                                background: 'var(--status-danger)', border: '1px solid var(--status-danger)',
+                                borderRadius: 4, cursor: 'pointer', color: '#fff',
+                                fontFamily: 'inherit',
+                              }}
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             )}
           </HudPanel>
@@ -364,17 +501,16 @@ export default function FieldMap() {
                 <div style={{ fontSize: 11, color: 'var(--text-dim)', marginBottom: 8 }}>Loading field data...</div>
               )}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                <div style={{ fontFamily: 'var(--font-heading)', fontSize: 16, color: 'var(--accent-primary)' }}>
+                <div style={{ fontFamily: 'var(--font-heading)', fontSize: 16, fontWeight: 700, color: 'var(--accent-primary)' }}>
                   {selectedField.name}
                 </div>
 
                 <DetailRow label="Acreage" value={`${selectedField.acres} ac`} />
-                <DetailRow label="Location" value={`${selectedField.lat}, ${selectedField.lon}`} />
+                <DetailRow label="Location" value={townNames[selectedField.id] || `${selectedField.lat}, ${selectedField.lon}`} />
+                <DetailRow label="Coordinates" value={`${selectedField.lat}, ${selectedField.lon}`} />
                 <DetailRow label="Crop" value={selectedField.crop || 'Not set'} />
 
-                <div style={{ borderTop: '1px solid #e2e0dc', paddingTop: 8, marginTop: 4, fontSize: 11, fontWeight: 600, color: 'var(--text-dim)' }}>
-                  SOIL DATA
-                </div>
+                <SectionHeader label="SOIL DATA" />
                 {errs.soil ? (
                   <ErrorRow message={errs.soil} />
                 ) : topSoil ? (
@@ -388,9 +524,7 @@ export default function FieldMap() {
                   <div style={{ fontSize: 11, color: 'var(--text-dim)' }}>No soil data loaded</div>
                 ) : null}
 
-                <div style={{ borderTop: '1px solid #e2e0dc', paddingTop: 8, marginTop: 4, fontSize: 11, fontWeight: 600, color: 'var(--text-dim)' }}>
-                  WEATHER
-                </div>
+                <SectionHeader label="WEATHER" />
                 {errs.weather ? (
                   <ErrorRow message={errs.weather} />
                 ) : wxDaily ? (
@@ -403,9 +537,7 @@ export default function FieldMap() {
                   <div style={{ fontSize: 11, color: 'var(--text-dim)' }}>No weather data loaded</div>
                 ) : null}
 
-                <div style={{ borderTop: '1px solid #e2e0dc', paddingTop: 8, marginTop: 4, fontSize: 11, fontWeight: 600, color: 'var(--text-dim)' }}>
-                  NDVI (SATELLITE)
-                </div>
+                <SectionHeader label="NDVI (SATELLITE)" />
                 {errs.ndvi ? (
                   <ErrorRow message={errs.ndvi} />
                 ) : ndvi ? (
@@ -421,6 +553,18 @@ export default function FieldMap() {
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+function SectionHeader({ label }) {
+  return (
+    <div style={{
+      borderTop: '1px solid var(--border-color)', paddingTop: 8, marginTop: 4,
+      fontSize: 10, fontWeight: 600, color: 'var(--text-dim)',
+      letterSpacing: '0.8px', textTransform: 'uppercase',
+    }}>
+      {label}
     </div>
   );
 }

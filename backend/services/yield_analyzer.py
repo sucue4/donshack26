@@ -4,6 +4,8 @@ Oh Deere! — AI-powered yield analysis orchestrator.
 Collects data from Open-Meteo and SoilGrids, combines it with the farmer's
 crop history and fertilizer data, then sends everything to Claude for
 structured JSON analysis matching the Pydantic models in models.py.
+
+Uses Anthropic tool_use to guarantee JSON output matches the Pydantic schemas.
 """
 
 import json
@@ -23,6 +25,8 @@ from models import (
 
 logger = logging.getLogger("ohdeere.services.yield_analyzer")
 
+MODEL_NAME = "claude-3-5-sonnet-20241022"
+
 CATEGORY_MODELS = {
     "weather": WeatherAnalysis,
     "soil_health": SoilHealthAnalysis,
@@ -37,53 +41,13 @@ CATEGORY_MODELS = {
 
 SYSTEM_PROMPT = """\
 You are an expert agronomist AI for the "Oh Deere!" precision agriculture platform.
-Your job is to analyze all provided data and produce a structured JSON yield-rate analysis.
+Your job is to analyze all provided data and produce a structured yield-rate analysis
+by calling the provided tool with the analysis result.
 
 You will be given:
 - Farm profile: crop zones with historical crop choices by year, fertilizers used, GPS coordinates.
 - Weather data: 7-day forecast and recent conditions from Open-Meteo.
 - Soil data: SoilGrids profiles (clay, sand, silt, pH, organic carbon, nitrogen, CEC, bulk density) at multiple depths.
-
-You MUST respond with **valid JSON only** — no markdown, no commentary, no code fences.
-
-The 5 analysis categories are:
-
-1. **Weather Forecasting** (key: "weather")
-   - Grade the weather outlook (A-F) and assign a risk level (low/moderate/high/critical).
-   - Identify upcoming severe weather events with dates.
-   - Assess crop-specific yield impacts (percent, negative = loss).
-   - Provide mitigation recommendations.
-
-2. **Soil Health** (key: "soil_health")
-   - Grade overall soil health and assign a risk level.
-   - Assess pH, nutrient levels (nitrogen, phosphorus, potassium, organic carbon, etc.),
-     organic matter trend, and the impact of the farmer's fertilizer choices.
-   - Provide actionable recommendations.
-
-3. **Pest Forecasting** (key: "pest_forecast")
-   - Grade pest risk and assign a risk level.
-   - List active threats and regional spread risks with threat type, affected crops, and severity.
-   - Suggest low-impact crop alternatives with pest resistance scores (0-100).
-   - Provide preventive recommendations.
-
-4. **Drought Resistance** (key: "drought_resistance")
-   - Grade drought risk and assign a risk level.
-   - Assess current drought status and 30/90-day outlook.
-   - Evaluate soil moisture based on weather and soil data.
-   - Suggest drought-resistant crops with tolerance scores (0-100) and water requirements.
-   - Provide water conservation recommendations.
-
-5. **Monoculture Risk** (key: "monoculture_risk")
-   - Grade monoculture risk and assign a risk level.
-   - Compute a risk score (0-100, higher = riskier) and consecutive same-crop years.
-   - List the farmer's crop history and regional crop data.
-   - Suggest diversification options with rotation fit and estimated yield benefit.
-   - Provide recommendations.
-
-When returning the FULL analysis, also include top-level fields:
-- "overall_grade": best summary grade (A-F)
-- "overall_yield_score": 0-100 composite score
-- "summary": a 2-3 sentence executive summary
 
 Grade meanings (use these for all categories):
   A = Excellent conditions, yield well above average expected
@@ -98,9 +62,36 @@ Risk level meanings:
   high = Action recommended soon
   critical = Immediate action required
 
-IMPORTANT: Use realistic data-driven assessments. If data is limited, state assumptions clearly in the summary fields.
-All list fields must contain at least one item.
+IMPORTANT:
+- Use realistic data-driven assessments. If data is limited, state assumptions clearly in summary fields.
+- All list fields MUST contain at least one item.
+- You MUST call the provided tool with your analysis. Do NOT return plain text.
 """
+
+
+def _build_tool_schema(model_cls) -> dict:
+    """Generate an Anthropic tool definition from a Pydantic model."""
+    schema = model_cls.model_json_schema()
+    # Anthropic tools don't support $defs at the top level; inline them.
+    schema = _resolve_refs(schema, schema.get("$defs", {}))
+    schema.pop("$defs", None)
+    schema.pop("title", None)
+    return schema
+
+
+def _resolve_refs(obj, defs):
+    """Recursively resolve $ref pointers against the $defs dict."""
+    if isinstance(obj, dict):
+        if "$ref" in obj:
+            ref_name = obj["$ref"].rsplit("/", 1)[-1]
+            resolved = defs.get(ref_name, {})
+            resolved = _resolve_refs(resolved, defs)
+            merged = {k: v for k, v in resolved.items() if k != "title"}
+            return merged
+        return {k: _resolve_refs(v, defs) for k, v in obj.items() if k != "title"}
+    if isinstance(obj, list):
+        return [_resolve_refs(item, defs) for item in obj]
+    return obj
 
 
 def _build_user_prompt(
@@ -132,9 +123,9 @@ def _build_user_prompt(
         parts.append("\n## Soil Data\nNo soil data available — use general knowledge for the location.")
 
     if category:
-        parts.append(f"\nReturn ONLY the JSON for the **{category}** analysis category.")
+        parts.append(f"\nAnalyze the **{category}** category and call the tool with the result.")
     else:
-        parts.append("\nReturn the FULL yield analysis JSON with all 5 categories.")
+        parts.append("\nPerform the FULL yield analysis across all 5 categories and call the tool with the result.")
 
     return "\n".join(parts)
 
@@ -149,16 +140,15 @@ def _get_client() -> anthropic.Anthropic:
     return anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 
 
-def _parse_json_response(text: str) -> dict:
-    """Extract and parse JSON from Claude's response, stripping any markdown fences."""
-    cleaned = text.strip()
-    if cleaned.startswith("```"):
-        # Remove opening fence (possibly ```json)
-        first_newline = cleaned.index("\n")
-        cleaned = cleaned[first_newline + 1 :]
-    if cleaned.endswith("```"):
-        cleaned = cleaned[: -3]
-    return json.loads(cleaned.strip())
+def _extract_tool_input(response) -> dict:
+    """Extract the tool call input from Claude's response."""
+    for block in response.content:
+        if block.type == "tool_use":
+            return block.input
+    raise ValueError(
+        "Claude did not return a tool call. "
+        f"Response: {[b.type for b in response.content]}"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -173,18 +163,23 @@ async def analyze_yield(
     """Run the full 5-category yield analysis via Claude and return structured output."""
     client = _get_client()
     user_prompt = _build_user_prompt(farm_profile, weather_data, soil_data)
+    tool_schema = _build_tool_schema(YieldAnalysis)
 
     response = client.messages.create(
-        model="claude-sonnet-4-20250514",
+        model=MODEL_NAME,
         max_tokens=8192,
         system=SYSTEM_PROMPT,
         messages=[{"role": "user", "content": user_prompt}],
+        tools=[{
+            "name": "yield_analysis",
+            "description": "Submit the complete yield analysis with all 5 categories.",
+            "input_schema": tool_schema,
+        }],
+        tool_choice={"type": "tool", "name": "yield_analysis"},
     )
 
-    raw_text = response.content[0].text
-    logger.info("Claude full analysis response length: %d chars", len(raw_text))
-
-    parsed = _parse_json_response(raw_text)
+    parsed = _extract_tool_input(response)
+    logger.info("Claude full analysis tool call received, keys: %s", list(parsed.keys()))
     return YieldAnalysis.model_validate(parsed)
 
 
@@ -201,17 +196,23 @@ async def analyze_category(
     model_cls = CATEGORY_MODELS[category]
     client = _get_client()
     user_prompt = _build_user_prompt(farm_profile, weather_data, soil_data, category=category)
+    tool_schema = _build_tool_schema(model_cls)
+    tool_name = f"{category}_analysis"
 
     response = client.messages.create(
-        model="claude-sonnet-4-20250514",
+        model=MODEL_NAME,
         max_tokens=4096,
         system=SYSTEM_PROMPT,
         messages=[{"role": "user", "content": user_prompt}],
+        tools=[{
+            "name": tool_name,
+            "description": f"Submit the {category} analysis result.",
+            "input_schema": tool_schema,
+        }],
+        tool_choice={"type": "tool", "name": tool_name},
     )
 
-    raw_text = response.content[0].text
-    logger.info("Claude %s analysis response length: %d chars", category, len(raw_text))
-
-    parsed = _parse_json_response(raw_text)
+    parsed = _extract_tool_input(response)
+    logger.info("Claude %s analysis tool call received", category)
     validated = model_cls.model_validate(parsed)
     return validated.model_dump()
