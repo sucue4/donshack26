@@ -10,6 +10,7 @@ logger = logging.getLogger("ohdeere.services.soilgrids")
 PROPERTIES = ["clay", "sand", "silt", "phh2o", "soc", "nitrogen", "cec", "bdod"]
 DEPTHS = ["0-5cm", "5-15cm", "15-30cm", "30-60cm", "60-100cm"]
 
+# Typical Midwest loam soil profiles (representative values for central Missouri)
 FALLBACK_PROFILES = [
     {"depth": "0-5cm", "clay": 22, "sand": 38, "silt": 40, "phh2o": 6.5, "soc": 3.2, "nitrogen": 0.18, "cec": 18.4, "bdod": 1.3},
     {"depth": "5-15cm", "clay": 24, "sand": 36, "silt": 40, "phh2o": 6.3, "soc": 2.8, "nitrogen": 0.15, "cec": 17.1, "bdod": 1.35},
