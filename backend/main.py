@@ -13,7 +13,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from routers import weather, soil, satellite, advisor, crops
+from routers import weather, soil, satellite, advisor, crops, onboarding, analysis
 from config import ANTHROPIC_API_KEY, GEE_PROJECT_ID, OPEN_METEO_FORECAST, SOILGRIDS_ENDPOINT
 
 # Configure logging
@@ -51,6 +51,8 @@ app.include_router(soil.router, prefix="/api/soil", tags=["Soil"])
 app.include_router(satellite.router, prefix="/api/satellite", tags=["Satellite"])
 app.include_router(advisor.router, prefix="/api", tags=["AI Advisor"])
 app.include_router(crops.router, prefix="/api/crops", tags=["Crops"])
+app.include_router(onboarding.router, prefix="/api/onboarding", tags=["Onboarding"])
+app.include_router(analysis.router, prefix="/api/analysis", tags=["Analysis"])
 
 
 @app.get("/api/health")

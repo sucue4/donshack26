@@ -1,41 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import {
-  AreaChart, Area, BarChart, Bar, LineChart, Line,
-  XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell,
-} from 'recharts';
+import { useNavigate } from 'react-router-dom';
 import HudPanel from '../components/HudPanel';
 import MetricCard from '../components/MetricCard';
+import { GradeBadge, RiskBadge, ScoreBar, CategoryCard, RecommendationList } from '../components/YieldWidgets';
 import { getFields } from '../fieldStore';
-
-const CustomTooltip = ({ active, payload, label }) => {
-  if (!active || !payload?.length) return null;
-  return (
-    <div style={{
-      background: '#fff', border: '1px solid #e2e0dc',
-      borderRadius: 6, padding: '8px 12px', fontSize: 12,
-      fontFamily: 'var(--font-body)', color: '#2c2c2c',
-      boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
-    }}>
-      <div style={{ color: '#6b6b6b', marginBottom: 4, fontWeight: 600 }}>{label}</div>
-      {payload.map((p, i) => (
-        <div key={i} style={{ color: p.color }}>
-          {p.name}: {p.value}{p.unit || ''}
-        </div>
-      ))}
-    </div>
-  );
-};
+import { getProfile, isOnboarded } from '../farmProfileStore';
 
 export default function Dashboard() {
+  const navigate = useNavigate();
   const [fields, setFields] = useState([]);
   const [selectedField, setSelectedField] = useState(null);
-  const [weatherData, setWeatherData] = useState([]);
-  const [weatherError, setWeatherError] = useState(null);
-  const [soilData, setSoilData] = useState(null);
-  const [soilError, setSoilError] = useState(null);
-  const [moistureData, setMoistureData] = useState([]);
-  const [moistureError, setMoistureError] = useState(null);
+  const [analysis, setAnalysis] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     const loadFields = () => {
@@ -50,74 +27,37 @@ export default function Dashboard() {
     return () => window.removeEventListener('ohdeere-fields-changed', loadFields);
   }, []);
 
-  useEffect(() => {
-    if (selectedField) fetchAllData();
-  }, [selectedField]);
-
-  const fetchAllData = async () => {
+  const runAnalysis = async () => {
     if (!selectedField) return;
+    const profile = getProfile(selectedField.id);
+    if (!profile) return;
+
     setLoading(true);
-    const { lat, lon } = selectedField;
+    setError(null);
 
-    // Fetch weather
-    setWeatherError(null);
     try {
-      const res = await fetch(`/api/weather/forecast?lat=${lat}&lon=${lon}&days=7`);
+      const res = await fetch('/api/analysis/full', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          field_id: selectedField.id,
+          crop_zones: (profile.cropZones || []).map((z) => ({
+            zone_name: z.zone_name,
+            crops_by_year: z.crops_by_year,
+          })),
+          fertilizers_used: profile.fertilizers || [],
+          lat: selectedField.lat,
+          lon: selectedField.lon,
+        }),
+      });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.detail || `HTTP ${res.status}`);
       }
       const data = await res.json();
-      const daily = data.daily;
-      if (daily && daily.time) {
-        const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-        const forecast = daily.time.map((t, i) => ({
-          day: days[new Date(t).getDay()],
-          temp: Math.round((daily.temperature_2m_max[i] + daily.temperature_2m_min[i]) / 2),
-          rain: Math.round((daily.precipitation_sum[i] || 0) * 10) / 10,
-        }));
-        setWeatherData(forecast);
-
-        // Extract soil moisture from hourly
-        const hourly = data.hourly;
-        if (hourly && hourly.soil_moisture_0_to_7cm) {
-          const times = hourly.time || [];
-          const sm = hourly.soil_moisture_0_to_7cm;
-          const trend = [];
-          for (let i = 0; i < Math.min(24, sm.length); i += 4) {
-            if (sm[i] !== null && sm[i] !== undefined) {
-              const d = new Date(times[i]);
-              const h = d.getHours();
-              trend.push({
-                hour: h === 0 ? '12AM' : h < 12 ? `${h}AM` : h === 12 ? '12PM' : `${h - 12}PM`,
-                moisture: Math.round(sm[i] * 100 * 10) / 10,
-              });
-            }
-          }
-          setMoistureData(trend);
-          setMoistureError(null);
-        }
-      }
+      setAnalysis(data);
     } catch (e) {
-      setWeatherError(e.message);
-      setWeatherData([]);
-      setMoistureError(e.message);
-      setMoistureData([]);
-    }
-
-    // Fetch soil
-    setSoilError(null);
-    try {
-      const res = await fetch(`/api/soil/properties?lat=${lat}&lon=${lon}`);
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.detail || `HTTP ${res.status}`);
-      }
-      const data = await res.json();
-      setSoilData(data);
-    } catch (e) {
-      setSoilError(e.message);
-      setSoilData(null);
+      setError(e.message);
     }
 
     setLoading(false);
@@ -126,41 +66,29 @@ export default function Dashboard() {
   const handleFieldSelect = (e) => {
     const field = fields.find((f) => f.id === Number(e.target.value) || f.id === e.target.value);
     if (field) setSelectedField(field);
+    setAnalysis(null);
   };
 
-  // Compute crop distribution from actual fields
-  const cropDistribution = (() => {
-    const cropColors = { Corn: '#3d7a4a', Soybean: '#7ab87f', Wheat: '#c0a030', 'Cover Crop': '#8a6a3a' };
-    const totals = {};
-    let totalAcres = 0;
-    fields.forEach((f) => {
-      const crop = f.crop || 'Unassigned';
-      totals[crop] = (totals[crop] || 0) + (f.acres || 0);
-      totalAcres += f.acres || 0;
-    });
-    if (totalAcres === 0) return [];
-    return Object.entries(totals).map(([name, acres]) => ({
-      name,
-      value: Math.round((acres / totalAcres) * 100),
-      color: cropColors[name] || '#6b6b6b',
-    }));
-  })();
-
-  const totalAcres = fields.reduce((sum, f) => sum + (f.acres || 0), 0);
-  const topSoil = soilData?.profiles?.[0];
-  const avgMoisture = moistureData.length > 0
-    ? Math.round(moistureData.reduce((s, m) => s + m.moisture, 0) / moistureData.length * 10) / 10
-    : null;
-
   const noFields = fields.length === 0;
+  const fieldProfile = selectedField ? getProfile(selectedField.id) : null;
+  const needsOnboarding = selectedField && !isOnboarded(selectedField.id);
+  const totalAcres = fields.reduce((sum, f) => sum + (f.acres || 0), 0);
 
   return (
     <div className="fade-in">
-      <p className="page-subtitle">Overview of your farm operations and field intelligence</p>
+      <p className="page-subtitle">Yield rate analysis and optimization for your farm</p>
 
       {noFields ? (
-        <div className="data-notice data-notice-error" style={{ marginBottom: 18, textAlign: 'center', padding: 24 }}>
-          No fields defined yet. Go to the Field Map page and draw your farm boundaries to get started.
+        <div style={{ textAlign: 'center', padding: 40 }}>
+          <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 8 }}>
+            Welcome to Oh Deere!
+          </div>
+          <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 20 }}>
+            Get started by setting up your farm profile.
+          </div>
+          <button className="btn btn-primary" onClick={() => navigate('/onboarding')} style={{ padding: '12px 32px', fontSize: 14 }}>
+            Start Farm Setup
+          </button>
         </div>
       ) : (
         <>
@@ -178,129 +106,136 @@ export default function Dashboard() {
             <span style={{ fontSize: 11, color: 'var(--text-dim)' }}>
               {selectedField ? `${selectedField.lat}, ${selectedField.lon}` : ''}
             </span>
-            <button className="btn btn-primary" onClick={fetchAllData} style={{ padding: '5px 12px', fontSize: 11 }}>
-              {loading ? 'Loading...' : 'Refresh'}
-            </button>
+            {!needsOnboarding && (
+              <button className="btn btn-primary" onClick={runAnalysis} disabled={loading} style={{ padding: '5px 14px', fontSize: 11 }}>
+                {loading ? 'Analyzing...' : 'Run Yield Analysis'}
+              </button>
+            )}
           </div>
 
-          <div className="metric-grid" style={{ marginBottom: 18 }}>
-            <MetricCard label="Active Fields" value={fields.length.toString()} change="User-defined" changeType="neutral" />
-            <MetricCard label="Total Acreage" value={Math.round(totalAcres).toString()} unit="ac" />
-            <MetricCard
-              label="Soil Moisture"
-              value={avgMoisture !== null ? avgMoisture.toString() : '--'}
-              unit="%"
-              change={moistureError ? 'Error loading' : avgMoisture !== null ? 'From Open-Meteo' : 'No data'}
-              changeType={moistureError ? 'negative' : 'neutral'}
-            />
-            <MetricCard
-              label="Soil pH"
-              value={topSoil ? (topSoil.phh2o || topSoil.ph || '--').toString() : '--'}
-              change={soilError ? 'Error loading' : topSoil ? 'From SoilGrids' : 'No data'}
-              changeType={soilError ? 'negative' : 'neutral'}
-            />
-          </div>
+          {needsOnboarding ? (
+            <div style={{ textAlign: 'center', padding: 32 }}>
+              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 8 }}>
+                Complete your farm profile for {selectedField?.name}
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 16 }}>
+                We need your crop history and fertilizer data to run yield analysis.
+              </div>
+              <button className="btn btn-primary" onClick={() => navigate('/onboarding')} style={{ padding: '10px 28px', fontSize: 13 }}>
+                Complete Setup
+              </button>
+            </div>
+          ) : (
+            <>
+              <div className="metric-grid" style={{ marginBottom: 18 }}>
+                <MetricCard label="Active Fields" value={fields.length.toString()} change="User-defined" changeType="neutral" />
+                <MetricCard label="Total Acreage" value={Math.round(totalAcres).toString()} unit="ac" />
+                <MetricCard
+                  label="Yield Score"
+                  value={analysis ? analysis.overall_yield_score.toString() : '--'}
+                  unit="/100"
+                  change={analysis ? `Grade: ${analysis.overall_grade}` : 'Run analysis to see score'}
+                  changeType={analysis ? (analysis.overall_yield_score >= 70 ? 'positive' : analysis.overall_yield_score >= 40 ? 'neutral' : 'negative') : 'neutral'}
+                />
+                <MetricCard
+                  label="Overall Grade"
+                  value={analysis ? analysis.overall_grade : '--'}
+                  change={analysis ? 'AI-powered assessment' : 'Run analysis'}
+                  changeType="neutral"
+                />
+              </div>
 
-          <div className="grid-2" style={{ marginBottom: 18 }}>
-            <HudPanel title="7-Day Forecast">
-              {weatherError ? (
-                <div className="data-notice data-notice-error">{weatherError}</div>
-              ) : weatherData.length === 0 ? (
-                <div className="data-notice">No weather data loaded</div>
-              ) : (
-                <ResponsiveContainer width="100%" height={180}>
-                  <BarChart data={weatherData}>
-                    <XAxis dataKey="day" tick={{ fill: '#9a9a9a', fontSize: 11 }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fill: '#9a9a9a', fontSize: 11 }} axisLine={false} tickLine={false} />
-                    <Tooltip content={<CustomTooltip />} />
-                    <Bar dataKey="temp" fill="#c0a030" radius={[4, 4, 0, 0]} name="Temp C" />
-                    <Bar dataKey="rain" fill="#4a7a8c" radius={[4, 4, 0, 0]} name="Rain mm" />
-                  </BarChart>
-                </ResponsiveContainer>
+              {error && (
+                <div className="data-notice data-notice-error" style={{ marginBottom: 16 }}>
+                  {error}
+                </div>
               )}
-            </HudPanel>
 
-            <HudPanel title="Soil Moisture -- Today">
-              {moistureError ? (
-                <div className="data-notice data-notice-error">{moistureError}</div>
-              ) : moistureData.length === 0 ? (
-                <div className="data-notice">No soil moisture data loaded</div>
-              ) : (
-                <ResponsiveContainer width="100%" height={180}>
-                  <LineChart data={moistureData}>
-                    <XAxis dataKey="hour" tick={{ fill: '#9a9a9a', fontSize: 11 }} axisLine={false} tickLine={false} />
-                    <YAxis domain={['auto', 'auto']} tick={{ fill: '#9a9a9a', fontSize: 11 }} axisLine={false} tickLine={false} />
-                    <Tooltip content={<CustomTooltip />} />
-                    <Line type="monotone" dataKey="moisture" stroke="#4a7a8c" strokeWidth={2} dot={{ r: 3, fill: '#4a7a8c' }} name="Moisture %" />
-                  </LineChart>
-                </ResponsiveContainer>
-              )}
-            </HudPanel>
-          </div>
-
-          <div className="grid-2" style={{ marginBottom: 18 }}>
-            <HudPanel title="Crop Distribution">
-              {cropDistribution.length === 0 ? (
-                <div className="data-notice">No crop assignments yet -- set crops on your fields</div>
-              ) : (
-                <>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <ResponsiveContainer width="100%" height={160}>
-                      <PieChart>
-                        <Pie data={cropDistribution} cx="50%" cy="50%" innerRadius={40} outerRadius={65}
-                          dataKey="value" strokeWidth={0} paddingAngle={3}>
-                          {cropDistribution.map((entry, i) => (
-                            <Cell key={i} fill={entry.color} />
-                          ))}
-                        </Pie>
-                        <Tooltip content={<CustomTooltip />} />
-                      </PieChart>
-                    </ResponsiveContainer>
+              {loading && (
+                <div style={{ textAlign: 'center', padding: 40 }}>
+                  <div className="loading-spinner" style={{ margin: '0 auto 12px' }} />
+                  <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+                    Analyzing weather, soil, pests, drought conditions, and crop rotation...
                   </div>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'center', marginTop: 4 }}>
-                    {cropDistribution.map((c) => (
-                      <div key={c.name} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: '#6b6b6b' }}>
-                        <div style={{ width: 8, height: 8, borderRadius: 2, background: c.color }} />
-                        {c.name} ({c.value}%)
+                </div>
+              )}
+
+              {analysis && !loading && (
+                <>
+                  {/* Overall Summary */}
+                  <HudPanel title="Yield Analysis Summary" className="mb-3">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 18, marginBottom: 14 }}>
+                      <GradeBadge grade={analysis.overall_grade} size="large" />
+                      <div style={{ flex: 1 }}>
+                        <ScoreBar score={analysis.overall_yield_score} label="Overall Yield Score" />
+                        <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4 }}>
+                          {analysis.summary}
+                        </div>
                       </div>
-                    ))}
+                    </div>
+                  </HudPanel>
+
+                  {/* 5 Category Cards */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 12, marginBottom: 18 }}>
+                    <CategoryCard
+                      title="Weather Forecasting"
+                      grade={analysis.weather.grade}
+                      riskLevel={analysis.weather.risk_level}
+                      summary={analysis.weather.summary}
+                      onClick={() => navigate('/weather')}
+                    />
+                    <CategoryCard
+                      title="Soil Health"
+                      grade={analysis.soil_health.grade}
+                      riskLevel={analysis.soil_health.risk_level}
+                      summary={analysis.soil_health.summary}
+                      onClick={() => navigate('/soil')}
+                    />
+                    <CategoryCard
+                      title="Pest Forecasting"
+                      grade={analysis.pest_forecast.grade}
+                      riskLevel={analysis.pest_forecast.risk_level}
+                      summary={analysis.pest_forecast.summary}
+                      onClick={() => navigate('/pests')}
+                    />
+                    <CategoryCard
+                      title="Drought Resistance"
+                      grade={analysis.drought_resistance.grade}
+                      riskLevel={analysis.drought_resistance.risk_level}
+                      summary={analysis.drought_resistance.summary}
+                      onClick={() => navigate('/drought')}
+                    />
+                    <CategoryCard
+                      title="Monoculture Risk"
+                      grade={analysis.monoculture_risk.grade}
+                      riskLevel={analysis.monoculture_risk.risk_level}
+                      summary={analysis.monoculture_risk.summary}
+                      onClick={() => navigate('/monoculture')}
+                    />
+                  </div>
+
+                  {/* Quick Recommendations */}
+                  <div className="grid-2">
+                    <HudPanel title="Top Weather Mitigations">
+                      <RecommendationList items={analysis.weather.mitigation_recommendations} />
+                    </HudPanel>
+                    <HudPanel title="Soil Health Recommendations">
+                      <RecommendationList items={analysis.soil_health.recommendations} />
+                    </HudPanel>
                   </div>
                 </>
               )}
-            </HudPanel>
 
-            <HudPanel title="Soil Profile (Top Layer)">
-              {soilError ? (
-                <div className="data-notice data-notice-error">{soilError}</div>
-              ) : !topSoil ? (
-                <div className="data-notice">No soil data loaded</div>
-              ) : (
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th>Property</th>
-                      <th>Value</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {[
-                      ['pH', topSoil.phh2o || topSoil.ph],
-                      ['Clay', `${topSoil.clay || '--'}%`],
-                      ['Sand', `${topSoil.sand || '--'}%`],
-                      ['Silt', `${topSoil.silt || '--'}%`],
-                      ['Organic C', `${topSoil.soc || topSoil.organic || '--'}%`],
-                      ['CEC', `${topSoil.cec || '--'} cmol/kg`],
-                    ].map(([k, v]) => (
-                      <tr key={k}>
-                        <td style={{ fontWeight: 500 }}>{k}</td>
-                        <td>{v}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              {!analysis && !loading && !error && (
+                <div style={{ textAlign: 'center', padding: 32, color: 'var(--text-dim)' }}>
+                  <div style={{ fontSize: 14, marginBottom: 8 }}>Ready to analyze</div>
+                  <div style={{ fontSize: 12 }}>
+                    Click "Run Yield Analysis" to get AI-powered grades and recommendations across all 5 categories.
+                  </div>
+                </div>
               )}
-            </HudPanel>
-          </div>
+            </>
+          )}
         </>
       )}
     </div>

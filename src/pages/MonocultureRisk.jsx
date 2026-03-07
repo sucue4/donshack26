@@ -5,12 +5,6 @@ import { GradeBadge, RiskBadge, ScoreBar, RecommendationList, DataTable } from '
 import { getFields } from '../fieldStore';
 import { getProfile, isOnboarded } from '../farmProfileStore';
 
-const TREND_COLORS = {
-  improving: 'var(--status-good)',
-  stable: 'var(--status-info)',
-  declining: 'var(--status-danger)',
-};
-
 function buildRequestBody(field, profile) {
   return {
     field_id: field.id,
@@ -24,7 +18,13 @@ function buildRequestBody(field, profile) {
   };
 }
 
-export default function SoilHealth() {
+const ROTATION_FIT_COLORS = {
+  excellent: 'var(--status-good)',
+  good: 'var(--status-info)',
+  fair: 'var(--status-warning)',
+};
+
+export default function MonocultureRisk() {
   const [fields, setFields] = useState([]);
   const [selectedField, setSelectedField] = useState(null);
   const [analysis, setAnalysis] = useState(null);
@@ -51,7 +51,7 @@ export default function SoilHealth() {
     setError(null);
 
     try {
-      const res = await fetch('/api/analysis/soil', {
+      const res = await fetch('/api/analysis/monoculture', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(buildRequestBody(selectedField, profile)),
@@ -80,7 +80,7 @@ export default function SoilHealth() {
 
   return (
     <div className="fade-in">
-      <p className="page-subtitle">Soil health analysis with nutrient levels, pH assessment, and fertilizer impact</p>
+      <p className="page-subtitle">Monoculture risk assessment and crop diversification recommendations</p>
 
       {noFields ? (
         <div className="data-notice data-notice-error" style={{ marginBottom: 18, textAlign: 'center', padding: 24 }}>
@@ -107,7 +107,7 @@ export default function SoilHealth() {
 
           {needsOnboarding && (
             <div className="data-notice" style={{ textAlign: 'center', padding: 24 }}>
-              Complete your farm profile for this field before running soil analysis.
+              Complete your farm profile for this field before running monoculture analysis.
             </div>
           )}
 
@@ -119,19 +119,19 @@ export default function SoilHealth() {
             <div style={{ textAlign: 'center', padding: 40 }}>
               <div className="loading-spinner" style={{ margin: '0 auto 12px' }} />
               <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-                Analyzing soil health and nutrient levels...
+                Analyzing crop rotation patterns and monoculture risks...
               </div>
             </div>
           )}
 
           {analysis && !loading && (
             <>
-              <HudPanel title="Soil Health Assessment" className="mb-3">
+              <HudPanel title="Monoculture Assessment" className="mb-3">
                 <div style={{ display: 'flex', alignItems: 'center', gap: 18, marginBottom: 14 }}>
                   <GradeBadge grade={analysis.grade} size="large" />
                   <div style={{ flex: 1 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                      <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>Soil Grade</span>
+                      <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>Monoculture Grade</span>
                       <RiskBadge level={analysis.risk_level} />
                     </div>
                     <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{analysis.summary}</div>
@@ -140,62 +140,84 @@ export default function SoilHealth() {
               </HudPanel>
 
               <div className="metric-grid" style={{ marginBottom: 18 }}>
-                <MetricCard label="Grade" value={analysis.grade} change="Soil assessment" changeType="neutral" />
-                <MetricCard label="Risk Level" value={analysis.risk_level} change="Current conditions" changeType={analysis.risk_level === 'low' ? 'positive' : analysis.risk_level === 'critical' ? 'negative' : 'neutral'} />
-                <MetricCard
-                  label="Organic Matter"
-                  value={analysis.organic_matter_trend || '--'}
-                  change="Trend direction"
-                  changeType={analysis.organic_matter_trend === 'improving' ? 'positive' : analysis.organic_matter_trend === 'declining' ? 'negative' : 'neutral'}
-                />
-                <MetricCard label="Nutrients Tracked" value={(analysis.nutrient_levels || []).length.toString()} change="Measured nutrients" changeType="neutral" />
+                <MetricCard label="Grade" value={analysis.grade} change="Monoculture assessment" changeType="neutral" />
+                <MetricCard label="Risk Level" value={analysis.risk_level} change="Current status" changeType={analysis.risk_level === 'low' ? 'positive' : analysis.risk_level === 'critical' ? 'negative' : 'neutral'} />
+                <MetricCard label="Same Crop Years" value={(analysis.consecutive_same_crop_years || 0).toString()} unit="yr" change="Consecutive seasons" changeType={analysis.consecutive_same_crop_years > 2 ? 'negative' : 'positive'} />
+                <MetricCard label="Diversification Options" value={(analysis.diversification_suggestions || []).length.toString()} change="Crop suggestions" changeType="neutral" />
               </div>
 
               <div className="grid-2" style={{ marginBottom: 18 }}>
-                <HudPanel title="pH Assessment">
-                  <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6, padding: '8px 0' }}>
-                    {analysis.ph_assessment}
+                <HudPanel title="Monoculture Risk Score">
+                  <ScoreBar score={analysis.risk_score || 0} label="Risk Score (higher = more risk)" />
+                  <div style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 8 }}>
+                    Score reflects the degree of monoculture risk based on crop history and regional data.
                   </div>
                 </HudPanel>
 
-                <HudPanel title="Organic Matter Trend">
-                  <div style={{ textAlign: 'center', padding: '16px 0' }}>
-                    <div style={{
-                      display: 'inline-block',
-                      padding: '8px 20px',
-                      borderRadius: 8,
-                      background: TREND_COLORS[analysis.organic_matter_trend] || 'var(--text-dim)',
-                      color: '#fff',
-                      fontSize: 16,
-                      fontWeight: 700,
-                      textTransform: 'capitalize',
-                    }}>
-                      {analysis.organic_matter_trend}
+                <HudPanel title="Crop History">
+                  {analysis.farmer_crop_history && analysis.farmer_crop_history.length > 0 ? (
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', padding: '8px 0' }}>
+                      {analysis.farmer_crop_history.map((crop, i) => (
+                        <span key={i} style={{
+                          padding: '4px 12px',
+                          borderRadius: 6,
+                          background: 'var(--bg-input)',
+                          fontSize: 12,
+                          fontWeight: 500,
+                          color: 'var(--text-primary)',
+                          border: '1px solid var(--border-color)',
+                        }}>
+                          {crop}
+                        </span>
+                      ))}
                     </div>
-                  </div>
+                  ) : (
+                    <div style={{ fontSize: 12, color: 'var(--text-dim)', padding: '8px 0' }}>No crop history available</div>
+                  )}
                 </HudPanel>
               </div>
 
-              {analysis.nutrient_levels && analysis.nutrient_levels.length > 0 && (
-                <HudPanel title="Nutrient Levels" className="mb-3">
+              {analysis.regional_crop_data && analysis.regional_crop_data.length > 0 && (
+                <HudPanel title="Regional Crop Data" className="mb-3">
                   <DataTable
-                    headers={['Nutrient', 'Current Level', 'Value', 'Unit', 'Recommendation']}
-                    rows={analysis.nutrient_levels.map((n) => [
-                      <span key={n.nutrient} style={{ fontWeight: 600 }}>{n.nutrient}</span>,
-                      n.current_level,
-                      n.value,
-                      n.unit,
-                      n.recommendation,
+                    headers={['Region', 'Primary Crop', 'Crop %', 'Acreage']}
+                    rows={analysis.regional_crop_data.map((r) => [
+                      r.region,
+                      r.primary_crop,
+                      <span key={r.region} style={{ fontWeight: 600, color: r.crop_percentage > 60 ? 'var(--status-danger)' : 'var(--status-good)' }}>
+                        {r.crop_percentage}%
+                      </span>,
+                      r.acreage.toLocaleString(),
                     ])}
                   />
                 </HudPanel>
               )}
 
-              <HudPanel title="Fertilizer Impact Assessment" className="mb-3">
-                <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6, padding: '8px 0' }}>
-                  {analysis.fertilizer_impact_assessment}
-                </div>
-              </HudPanel>
+              {analysis.diversification_suggestions && analysis.diversification_suggestions.length > 0 && (
+                <HudPanel title="Diversification Suggestions" className="mb-3">
+                  {analysis.diversification_suggestions.map((s) => (
+                    <div key={s.crop} style={{ marginBottom: 12, padding: '10px 14px', background: 'var(--bg-tertiary)', borderRadius: 8 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+                        <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{s.crop}</span>
+                        <span style={{
+                          fontSize: 10, padding: '2px 8px', borderRadius: 10,
+                          background: ROTATION_FIT_COLORS[s.rotation_fit] || 'var(--text-dim)',
+                          color: '#fff', fontWeight: 600, textTransform: 'uppercase',
+                        }}>
+                          {s.rotation_fit} fit
+                        </span>
+                        {s.estimated_yield_benefit_pct != null && (
+                          <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--status-good)' }}>
+                            +{s.estimated_yield_benefit_pct}% yield
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 4 }}>{s.benefit}</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-dim)' }}>{s.rationale}</div>
+                    </div>
+                  ))}
+                </HudPanel>
+              )}
 
               {analysis.recommendations && analysis.recommendations.length > 0 && (
                 <HudPanel title="Recommendations">
@@ -209,7 +231,7 @@ export default function SoilHealth() {
             <div style={{ textAlign: 'center', padding: 32, color: 'var(--text-dim)' }}>
               <div style={{ fontSize: 14, marginBottom: 8 }}>Ready to analyze</div>
               <div style={{ fontSize: 12 }}>
-                Click "Run Analysis" to get soil health data, nutrient levels, and fertilizer impact assessments.
+                Click "Run Analysis" to get monoculture risk data and crop diversification recommendations.
               </div>
             </div>
           )}
