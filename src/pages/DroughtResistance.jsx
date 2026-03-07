@@ -5,12 +5,6 @@ import { GradeBadge, RiskBadge, ScoreBar, RecommendationList, DataTable } from '
 import { getFields } from '../fieldStore';
 import { getProfile, isOnboarded } from '../farmProfileStore';
 
-const TREND_COLORS = {
-  improving: 'var(--status-good)',
-  stable: 'var(--status-info)',
-  declining: 'var(--status-danger)',
-};
-
 function buildRequestBody(field, profile) {
   return {
     field_id: field.id,
@@ -24,7 +18,25 @@ function buildRequestBody(field, profile) {
   };
 }
 
-export default function SoilHealth() {
+const DROUGHT_STATUS_LABELS = {
+  none: 'None',
+  abnormally_dry: 'Abnormally Dry',
+  moderate: 'Moderate Drought',
+  severe: 'Severe Drought',
+  extreme: 'Extreme Drought',
+  exceptional: 'Exceptional Drought',
+};
+
+const DROUGHT_STATUS_COLORS = {
+  none: 'var(--status-good)',
+  abnormally_dry: 'var(--status-info)',
+  moderate: 'var(--status-warning)',
+  severe: 'var(--status-danger)',
+  extreme: 'var(--status-danger)',
+  exceptional: 'var(--status-danger)',
+};
+
+export default function DroughtResistance() {
   const [fields, setFields] = useState([]);
   const [selectedField, setSelectedField] = useState(null);
   const [analysis, setAnalysis] = useState(null);
@@ -51,7 +63,7 @@ export default function SoilHealth() {
     setError(null);
 
     try {
-      const res = await fetch('/api/analysis/soil', {
+      const res = await fetch('/api/analysis/drought', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(buildRequestBody(selectedField, profile)),
@@ -80,7 +92,7 @@ export default function SoilHealth() {
 
   return (
     <div className="fade-in">
-      <p className="page-subtitle">Soil health analysis with nutrient levels, pH assessment, and fertilizer impact</p>
+      <p className="page-subtitle">Drought risk assessment and water-efficient crop recommendations</p>
 
       {noFields ? (
         <div className="data-notice data-notice-error" style={{ marginBottom: 18, textAlign: 'center', padding: 24 }}>
@@ -107,7 +119,7 @@ export default function SoilHealth() {
 
           {needsOnboarding && (
             <div className="data-notice" style={{ textAlign: 'center', padding: 24 }}>
-              Complete your farm profile for this field before running soil analysis.
+              Complete your farm profile for this field before running drought analysis.
             </div>
           )}
 
@@ -119,19 +131,19 @@ export default function SoilHealth() {
             <div style={{ textAlign: 'center', padding: 40 }}>
               <div className="loading-spinner" style={{ margin: '0 auto 12px' }} />
               <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-                Analyzing soil health and nutrient levels...
+                Analyzing drought conditions and soil moisture...
               </div>
             </div>
           )}
 
           {analysis && !loading && (
             <>
-              <HudPanel title="Soil Health Assessment" className="mb-3">
+              <HudPanel title="Drought Assessment" className="mb-3">
                 <div style={{ display: 'flex', alignItems: 'center', gap: 18, marginBottom: 14 }}>
                   <GradeBadge grade={analysis.grade} size="large" />
                   <div style={{ flex: 1 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                      <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>Soil Grade</span>
+                      <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>Drought Grade</span>
                       <RiskBadge level={analysis.risk_level} />
                     </div>
                     <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{analysis.summary}</div>
@@ -140,66 +152,70 @@ export default function SoilHealth() {
               </HudPanel>
 
               <div className="metric-grid" style={{ marginBottom: 18 }}>
-                <MetricCard label="Grade" value={analysis.grade} change="Soil assessment" changeType="neutral" />
-                <MetricCard label="Risk Level" value={analysis.risk_level} change="Current conditions" changeType={analysis.risk_level === 'low' ? 'positive' : analysis.risk_level === 'critical' ? 'negative' : 'neutral'} />
                 <MetricCard
-                  label="Organic Matter"
-                  value={analysis.organic_matter_trend || '--'}
-                  change="Trend direction"
-                  changeType={analysis.organic_matter_trend === 'improving' ? 'positive' : analysis.organic_matter_trend === 'declining' ? 'negative' : 'neutral'}
+                  label="Drought Status"
+                  value={DROUGHT_STATUS_LABELS[analysis.current_drought_status] || analysis.current_drought_status}
+                  change="Current conditions"
+                  changeType={analysis.current_drought_status === 'none' ? 'positive' : 'negative'}
                 />
-                <MetricCard label="Nutrients Tracked" value={(analysis.nutrient_levels || []).length.toString()} change="Measured nutrients" changeType="neutral" />
+                <MetricCard label="30-Day Outlook" value={analysis.drought_outlook_30_day || '--'} change="Short-term forecast" changeType="neutral" />
+                <MetricCard label="90-Day Outlook" value={analysis.drought_outlook_90_day || '--'} change="Long-term forecast" changeType="neutral" />
+                <MetricCard label="Resistant Crops" value={(analysis.resistant_crop_suggestions || []).length.toString()} change="Suggestions available" changeType="neutral" />
               </div>
 
               <div className="grid-2" style={{ marginBottom: 18 }}>
-                <HudPanel title="pH Assessment">
-                  <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6, padding: '8px 0' }}>
-                    {analysis.ph_assessment}
-                  </div>
-                </HudPanel>
-
-                <HudPanel title="Organic Matter Trend">
+                <HudPanel title="Current Drought Status">
                   <div style={{ textAlign: 'center', padding: '16px 0' }}>
                     <div style={{
                       display: 'inline-block',
                       padding: '8px 20px',
                       borderRadius: 8,
-                      background: TREND_COLORS[analysis.organic_matter_trend] || 'var(--text-dim)',
+                      background: DROUGHT_STATUS_COLORS[analysis.current_drought_status] || 'var(--text-dim)',
                       color: '#fff',
                       fontSize: 16,
                       fontWeight: 700,
-                      textTransform: 'capitalize',
                     }}>
-                      {analysis.organic_matter_trend}
+                      {DROUGHT_STATUS_LABELS[analysis.current_drought_status] || analysis.current_drought_status}
                     </div>
+                  </div>
+                </HudPanel>
+
+                <HudPanel title="Soil Moisture Assessment">
+                  <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6, padding: '8px 0' }}>
+                    {analysis.soil_moisture_assessment}
                   </div>
                 </HudPanel>
               </div>
 
-              {analysis.nutrient_levels && analysis.nutrient_levels.length > 0 && (
-                <HudPanel title="Nutrient Levels" className="mb-3">
-                  <DataTable
-                    headers={['Nutrient', 'Current Level', 'Value', 'Unit', 'Recommendation']}
-                    rows={analysis.nutrient_levels.map((n) => [
-                      <span key={n.nutrient} style={{ fontWeight: 600 }}>{n.nutrient}</span>,
-                      n.current_level,
-                      n.value,
-                      n.unit,
-                      n.recommendation,
-                    ])}
-                  />
+              {analysis.resistant_crop_suggestions && analysis.resistant_crop_suggestions.length > 0 && (
+                <HudPanel title="Drought-Resistant Crop Suggestions" className="mb-3">
+                  {analysis.resistant_crop_suggestions.map((s) => (
+                    <div key={s.crop} style={{ marginBottom: 12, padding: '10px 14px', background: 'var(--bg-tertiary)', borderRadius: 8 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+                        <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{s.crop}</span>
+                        <span style={{
+                          fontSize: 10, padding: '2px 8px', borderRadius: 10,
+                          background: s.water_requirement === 'low' ? 'var(--status-good)' : s.water_requirement === 'high' ? 'var(--status-danger)' : 'var(--status-warning)',
+                          color: '#fff', fontWeight: 600, textTransform: 'uppercase',
+                        }}>
+                          {s.water_requirement} water
+                        </span>
+                      </div>
+                      <ScoreBar score={s.drought_tolerance_score} label="Drought Tolerance Score" />
+                      {s.expected_yield_under_drought && (
+                        <div style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 4 }}>
+                          Expected yield under drought: {s.expected_yield_under_drought}
+                        </div>
+                      )}
+                      <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 4 }}>{s.rationale}</div>
+                    </div>
+                  ))}
                 </HudPanel>
               )}
 
-              <HudPanel title="Fertilizer Impact Assessment" className="mb-3">
-                <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6, padding: '8px 0' }}>
-                  {analysis.fertilizer_impact_assessment}
-                </div>
-              </HudPanel>
-
-              {analysis.recommendations && analysis.recommendations.length > 0 && (
-                <HudPanel title="Recommendations">
-                  <RecommendationList items={analysis.recommendations} />
+              {analysis.water_conservation_recommendations && analysis.water_conservation_recommendations.length > 0 && (
+                <HudPanel title="Water Conservation Recommendations">
+                  <RecommendationList items={analysis.water_conservation_recommendations} />
                 </HudPanel>
               )}
             </>
@@ -209,7 +225,7 @@ export default function SoilHealth() {
             <div style={{ textAlign: 'center', padding: 32, color: 'var(--text-dim)' }}>
               <div style={{ fontSize: 14, marginBottom: 8 }}>Ready to analyze</div>
               <div style={{ fontSize: 12 }}>
-                Click "Run Analysis" to get soil health data, nutrient levels, and fertilizer impact assessments.
+                Click "Run Analysis" to get drought resistance data and water-efficient crop recommendations.
               </div>
             </div>
           )}

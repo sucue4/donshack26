@@ -5,12 +5,6 @@ import { GradeBadge, RiskBadge, ScoreBar, RecommendationList, DataTable } from '
 import { getFields } from '../fieldStore';
 import { getProfile, isOnboarded } from '../farmProfileStore';
 
-const TREND_COLORS = {
-  improving: 'var(--status-good)',
-  stable: 'var(--status-info)',
-  declining: 'var(--status-danger)',
-};
-
 function buildRequestBody(field, profile) {
   return {
     field_id: field.id,
@@ -24,7 +18,7 @@ function buildRequestBody(field, profile) {
   };
 }
 
-export default function SoilHealth() {
+export default function WeatherForecast() {
   const [fields, setFields] = useState([]);
   const [selectedField, setSelectedField] = useState(null);
   const [analysis, setAnalysis] = useState(null);
@@ -51,7 +45,7 @@ export default function SoilHealth() {
     setError(null);
 
     try {
-      const res = await fetch('/api/analysis/soil', {
+      const res = await fetch('/api/analysis/weather', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(buildRequestBody(selectedField, profile)),
@@ -80,7 +74,7 @@ export default function SoilHealth() {
 
   return (
     <div className="fade-in">
-      <p className="page-subtitle">Soil health analysis with nutrient levels, pH assessment, and fertilizer impact</p>
+      <p className="page-subtitle">Weather impact analysis and crop mitigation recommendations</p>
 
       {noFields ? (
         <div className="data-notice data-notice-error" style={{ marginBottom: 18, textAlign: 'center', padding: 24 }}>
@@ -107,7 +101,7 @@ export default function SoilHealth() {
 
           {needsOnboarding && (
             <div className="data-notice" style={{ textAlign: 'center', padding: 24 }}>
-              Complete your farm profile for this field before running soil analysis.
+              Complete your farm profile for this field before running weather analysis.
             </div>
           )}
 
@@ -119,19 +113,19 @@ export default function SoilHealth() {
             <div style={{ textAlign: 'center', padding: 40 }}>
               <div className="loading-spinner" style={{ margin: '0 auto 12px' }} />
               <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-                Analyzing soil health and nutrient levels...
+                Analyzing weather conditions and crop impacts...
               </div>
             </div>
           )}
 
           {analysis && !loading && (
             <>
-              <HudPanel title="Soil Health Assessment" className="mb-3">
+              <HudPanel title="Weather Assessment" className="mb-3">
                 <div style={{ display: 'flex', alignItems: 'center', gap: 18, marginBottom: 14 }}>
                   <GradeBadge grade={analysis.grade} size="large" />
                   <div style={{ flex: 1 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                      <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>Soil Grade</span>
+                      <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>Weather Grade</span>
                       <RiskBadge level={analysis.risk_level} />
                     </div>
                     <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{analysis.summary}</div>
@@ -140,66 +134,45 @@ export default function SoilHealth() {
               </HudPanel>
 
               <div className="metric-grid" style={{ marginBottom: 18 }}>
-                <MetricCard label="Grade" value={analysis.grade} change="Soil assessment" changeType="neutral" />
+                <MetricCard label="Grade" value={analysis.grade} change="Weather assessment" changeType="neutral" />
                 <MetricCard label="Risk Level" value={analysis.risk_level} change="Current conditions" changeType={analysis.risk_level === 'low' ? 'positive' : analysis.risk_level === 'critical' ? 'negative' : 'neutral'} />
-                <MetricCard
-                  label="Organic Matter"
-                  value={analysis.organic_matter_trend || '--'}
-                  change="Trend direction"
-                  changeType={analysis.organic_matter_trend === 'improving' ? 'positive' : analysis.organic_matter_trend === 'declining' ? 'negative' : 'neutral'}
-                />
-                <MetricCard label="Nutrients Tracked" value={(analysis.nutrient_levels || []).length.toString()} change="Measured nutrients" changeType="neutral" />
+                <MetricCard label="Upcoming Events" value={(analysis.upcoming_events || []).length.toString()} change="Forecast period" changeType="neutral" />
+                <MetricCard label="Crops Impacted" value={(analysis.crop_impacts || []).length.toString()} change="Affected crops" changeType="neutral" />
               </div>
 
-              <div className="grid-2" style={{ marginBottom: 18 }}>
-                <HudPanel title="pH Assessment">
-                  <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6, padding: '8px 0' }}>
-                    {analysis.ph_assessment}
-                  </div>
-                </HudPanel>
-
-                <HudPanel title="Organic Matter Trend">
-                  <div style={{ textAlign: 'center', padding: '16px 0' }}>
-                    <div style={{
-                      display: 'inline-block',
-                      padding: '8px 20px',
-                      borderRadius: 8,
-                      background: TREND_COLORS[analysis.organic_matter_trend] || 'var(--text-dim)',
-                      color: '#fff',
-                      fontSize: 16,
-                      fontWeight: 700,
-                      textTransform: 'capitalize',
-                    }}>
-                      {analysis.organic_matter_trend}
-                    </div>
-                  </div>
-                </HudPanel>
-              </div>
-
-              {analysis.nutrient_levels && analysis.nutrient_levels.length > 0 && (
-                <HudPanel title="Nutrient Levels" className="mb-3">
+              {analysis.upcoming_events && analysis.upcoming_events.length > 0 && (
+                <HudPanel title="Upcoming Weather Events" className="mb-3">
                   <DataTable
-                    headers={['Nutrient', 'Current Level', 'Value', 'Unit', 'Recommendation']}
-                    rows={analysis.nutrient_levels.map((n) => [
-                      <span key={n.nutrient} style={{ fontWeight: 600 }}>{n.nutrient}</span>,
-                      n.current_level,
-                      n.value,
-                      n.unit,
-                      n.recommendation,
+                    headers={['Date', 'Event Type', 'Severity', 'Description']}
+                    rows={analysis.upcoming_events.map((evt) => [
+                      evt.date,
+                      evt.event_type,
+                      evt.severity,
+                      evt.description,
                     ])}
                   />
                 </HudPanel>
               )}
 
-              <HudPanel title="Fertilizer Impact Assessment" className="mb-3">
-                <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6, padding: '8px 0' }}>
-                  {analysis.fertilizer_impact_assessment}
-                </div>
-              </HudPanel>
+              {analysis.crop_impacts && analysis.crop_impacts.length > 0 && (
+                <HudPanel title="Crop Impact Simulation" className="mb-3">
+                  <DataTable
+                    headers={['Crop', 'Impact', 'Yield Impact %', 'Mitigation Action']}
+                    rows={analysis.crop_impacts.map((ci) => [
+                      ci.crop,
+                      ci.impact_description,
+                      <span key={ci.crop} style={{ color: ci.estimated_yield_impact_pct < 0 ? 'var(--status-danger)' : 'var(--status-good)', fontWeight: 600 }}>
+                        {ci.estimated_yield_impact_pct > 0 ? '+' : ''}{ci.estimated_yield_impact_pct}%
+                      </span>,
+                      ci.mitigation_action,
+                    ])}
+                  />
+                </HudPanel>
+              )}
 
-              {analysis.recommendations && analysis.recommendations.length > 0 && (
-                <HudPanel title="Recommendations">
-                  <RecommendationList items={analysis.recommendations} />
+              {analysis.mitigation_recommendations && analysis.mitigation_recommendations.length > 0 && (
+                <HudPanel title="Mitigation Recommendations">
+                  <RecommendationList items={analysis.mitigation_recommendations} />
                 </HudPanel>
               )}
             </>
@@ -209,7 +182,7 @@ export default function SoilHealth() {
             <div style={{ textAlign: 'center', padding: 32, color: 'var(--text-dim)' }}>
               <div style={{ fontSize: 14, marginBottom: 8 }}>Ready to analyze</div>
               <div style={{ fontSize: 12 }}>
-                Click "Run Analysis" to get soil health data, nutrient levels, and fertilizer impact assessments.
+                Click "Run Analysis" to get weather forecasting data and crop impact assessments.
               </div>
             </div>
           )}
