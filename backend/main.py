@@ -86,10 +86,12 @@ async def service_status():
     }
 
     # Check Earth Engine
-    results["satellite"] = {
-        "status": "ok" if GEE_PROJECT_ID else "demo_mode",
-        "detail": "Project configured" if GEE_PROJECT_ID else "GEE_PROJECT_ID not set -- using demo data",
-    }
+    try:
+        from services.earth_engine import _check_gee_configured
+        _check_gee_configured()
+        results["satellite"] = {"status": "ok", "detail": "GEE configured"}
+    except Exception as e:
+        results["satellite"] = {"status": "not_configured", "detail": str(e)}
 
     # Crops (local data, always available)
     results["crops"] = {"status": "ok", "detail": "Local database"}

@@ -1,4 +1,7 @@
-"""Open-Meteo weather service — no API key required."""
+"""Open-Meteo weather service — no API key required.
+
+Raises exceptions on failure so callers can show real error messages.
+"""
 
 import logging
 from datetime import datetime, timedelta
@@ -9,70 +12,13 @@ from config import OPEN_METEO_FORECAST, OPEN_METEO_HISTORICAL
 logger = logging.getLogger("ohdeere.services.open_meteo")
 
 
-def _fallback_forecast(lat: float, lon: float, days: int) -> dict:
-    """Return representative sample forecast data when the API is unreachable."""
-    today = datetime.utcnow().date()
-    dates = [(today + timedelta(days=i)).isoformat() for i in range(days)]
-    hours = [
-        f"{dates[0]}T{h:02d}:00" for h in range(24)
-    ]
-    # Typical early-spring Midwest values
-    daily_highs = [18, 20, 17, 22, 24, 19, 21][:days]
-    daily_lows = [6, 8, 5, 9, 11, 7, 8][:days]
-    precip = [0.0, 2.4, 8.1, 0.0, 0.0, 5.2, 1.0][:days]
-    et0 = [3.2, 3.5, 2.1, 3.8, 4.0, 2.8, 3.0][:days]
-    codes = [1, 3, 61, 0, 0, 51, 2][:days]
-    hourly_temp = [round(8 + 6 * ((h % 24) / 12 if h % 24 <= 12 else (24 - h % 24) / 12), 1) for h in range(24)]
-    hourly_hum = [round(70 - 15 * ((h % 24) / 12 if h % 24 <= 12 else (24 - h % 24) / 12)) for h in range(24)]
-    hourly_wind = [round(8 + 4 * ((h % 24) / 14 if h % 24 <= 14 else (24 - h % 24) / 10), 1) for h in range(24)]
-    return {
-        "latitude": lat,
-        "longitude": lon,
-        "timezone": "America/Chicago",
-        "daily": {
-            "time": dates,
-            "temperature_2m_max": daily_highs,
-            "temperature_2m_min": daily_lows,
-            "precipitation_sum": precip,
-            "et0_fao_evapotranspiration": et0,
-            "wind_speed_10m_max": [12.5, 15.0, 8.2, 18.3, 10.1, 14.6, 11.8][:days],
-            "weather_code": codes,
-        },
-        "hourly": {
-            "time": hours,
-            "temperature_2m": hourly_temp,
-            "relative_humidity_2m": hourly_hum,
-            "precipitation": [0.0] * 24,
-            "soil_moisture_0_to_7cm": [0.28] * 24,
-            "wind_speed_10m": hourly_wind,
-        },
-        "source": "fallback",
-    }
-
-
-def _fallback_historical(lat: float, lon: float, start_date: str, end_date: str) -> dict:
-    """Return representative sample historical data when the API is unreachable."""
-    start = datetime.strptime(start_date, "%Y-%m-%d").date()
-    end = datetime.strptime(end_date, "%Y-%m-%d").date()
-    num_days = max(1, (end - start).days + 1)
-    dates = [(start + timedelta(days=i)).isoformat() for i in range(num_days)]
-    return {
-        "latitude": lat,
-        "longitude": lon,
-        "timezone": "America/Chicago",
-        "daily": {
-            "time": dates,
-            "temperature_2m_max": [round(18 + 3 * (i % 5), 1) for i in range(num_days)],
-            "temperature_2m_min": [round(6 + 2 * (i % 4), 1) for i in range(num_days)],
-            "precipitation_sum": [round(2.0 * (i % 3), 1) for i in range(num_days)],
-            "et0_fao_evapotranspiration": [round(3.0 + 0.5 * (i % 4), 1) for i in range(num_days)],
-        },
-        "source": "fallback",
-    }
+class WeatherServiceError(Exception):
+    """Raised when the Open-Meteo API is unreachable or returns an error."""
+    pass
 
 
 async def get_forecast(lat: float, lon: float, days: int = 7) -> dict:
-    """Fetch weather forecast from Open-Meteo. Falls back to sample data on failure."""
+    """Fetch weather forecast from Open-Meteo. Raises WeatherServiceError on failure."""
     params = {
         "latitude": lat,
         "longitude": lon,
@@ -93,14 +39,20 @@ async def get_forecast(lat: float, lon: float, days: int = 7) -> dict:
         async with httpx.AsyncClient(timeout=15.0) as client:
             resp = await client.get(OPEN_METEO_FORECAST, params=params)
             resp.raise_for_status()
-            return resp.json()
-    except Exception as exc:
-        logger.warning("Open-Meteo forecast unavailable, using fallback data: %s", exc)
-        return _fallback_forecast(lat, lon, days)
+            data = resp.json()
+            if "error" in data:
+                raise WeatherServiceError(f"Open-Meteo error: {data.get('reason', data['error'])}")
+            return data
+    except httpx.HTTPStatusError as exc:
+        logger.error("Open-Meteo forecast HTTP error: %s", exc)
+        raise WeatherServiceError(f"Open-Meteo returned HTTP {exc.response.status_code}") from exc
+    except httpx.RequestError as exc:
+        logger.error("Open-Meteo forecast connection error: %s", exc)
+        raise WeatherServiceError(f"Cannot connect to Open-Meteo: {exc}") from exc
 
 
 async def get_historical(lat: float, lon: float, start_date: str, end_date: str) -> dict:
-    """Fetch historical weather data from Open-Meteo. Falls back to sample data on failure."""
+    """Fetch historical weather data from Open-Meteo. Raises WeatherServiceError on failure."""
     params = {
         "latitude": lat,
         "longitude": lon,
@@ -116,7 +68,150 @@ async def get_historical(lat: float, lon: float, start_date: str, end_date: str)
         async with httpx.AsyncClient(timeout=15.0) as client:
             resp = await client.get(OPEN_METEO_HISTORICAL, params=params)
             resp.raise_for_status()
-            return resp.json()
-    except Exception as exc:
-        logger.warning("Open-Meteo historical unavailable, using fallback data: %s", exc)
-        return _fallback_historical(lat, lon, start_date, end_date)
+            data = resp.json()
+            if "error" in data:
+                raise WeatherServiceError(f"Open-Meteo error: {data.get('reason', data['error'])}")
+            return data
+    except httpx.HTTPStatusError as exc:
+        logger.error("Open-Meteo historical HTTP error: %s", exc)
+        raise WeatherServiceError(f"Open-Meteo returned HTTP {exc.response.status_code}") from exc
+    except httpx.RequestError as exc:
+        logger.error("Open-Meteo historical connection error: %s", exc)
+        raise WeatherServiceError(f"Cannot connect to Open-Meteo: {exc}") from exc
+
+
+async def get_water_balance(lat: float, lon: float, days: int = 7) -> dict:
+    """Compute water balance from real Open-Meteo data: soil moisture, ET0, precipitation."""
+    params = {
+        "latitude": lat,
+        "longitude": lon,
+        "daily": ",".join([
+            "temperature_2m_max", "temperature_2m_min",
+            "precipitation_sum", "et0_fao_evapotranspiration",
+        ]),
+        "hourly": "soil_moisture_0_to_7cm",
+        "timezone": "auto",
+        "forecast_days": days,
+        "past_days": 7,
+    }
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.get(OPEN_METEO_FORECAST, params=params)
+            resp.raise_for_status()
+            data = resp.json()
+            if "error" in data:
+                raise WeatherServiceError(f"Open-Meteo error: {data.get('reason', data['error'])}")
+
+        daily = data.get("daily", {})
+        hourly = data.get("hourly", {})
+
+        # Soil moisture trend from hourly data (sample every 6 hours)
+        sm_values = hourly.get("soil_moisture_0_to_7cm", [])
+        sm_times = hourly.get("time", [])
+        moisture_trend = []
+        for i in range(0, len(sm_values), 6):
+            if i < len(sm_times) and sm_values[i] is not None:
+                moisture_trend.append({
+                    "time": sm_times[i],
+                    "moisture_pct": round(sm_values[i] * 100, 1),
+                })
+
+        # ET0 vs precipitation daily comparison
+        et0_vals = daily.get("et0_fao_evapotranspiration", [])
+        precip_vals = daily.get("precipitation_sum", [])
+        times = daily.get("time", [])
+        daily_balance = []
+        total_precip = 0
+        total_et0 = 0
+        for i in range(len(times)):
+            et0 = et0_vals[i] if i < len(et0_vals) and et0_vals[i] is not None else 0
+            precip = precip_vals[i] if i < len(precip_vals) and precip_vals[i] is not None else 0
+            total_precip += precip
+            total_et0 += et0
+            daily_balance.append({
+                "date": times[i],
+                "et0": round(et0, 1),
+                "precipitation": round(precip, 1),
+                "balance": round(precip - et0, 1),
+            })
+
+        avg_moisture = round(sum(m["moisture_pct"] for m in moisture_trend) / len(moisture_trend), 1) if moisture_trend else None
+
+        return {
+            "location": {"lat": lat, "lon": lon},
+            "moisture_trend": moisture_trend,
+            "daily_balance": daily_balance,
+            "summary": {
+                "avg_soil_moisture_pct": avg_moisture,
+                "total_precipitation_mm": round(total_precip, 1),
+                "total_et0_mm": round(total_et0, 1),
+                "water_balance_mm": round(total_precip - total_et0, 1),
+            },
+        }
+    except httpx.HTTPStatusError as exc:
+        logger.error("Open-Meteo water balance HTTP error: %s", exc)
+        raise WeatherServiceError(f"Open-Meteo returned HTTP {exc.response.status_code}") from exc
+    except httpx.RequestError as exc:
+        logger.error("Open-Meteo water balance connection error: %s", exc)
+        raise WeatherServiceError(f"Cannot connect to Open-Meteo: {exc}") from exc
+
+
+async def get_gdd(lat: float, lon: float, start_date: str, end_date: str, base_temp_f: float = 50.0) -> dict:
+    """Compute Growing Degree Days from historical Open-Meteo temperature data."""
+    params = {
+        "latitude": lat,
+        "longitude": lon,
+        "start_date": start_date,
+        "end_date": end_date,
+        "daily": "temperature_2m_max,temperature_2m_min",
+        "timezone": "auto",
+        "temperature_unit": "fahrenheit",
+    }
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.get(OPEN_METEO_HISTORICAL, params=params)
+            resp.raise_for_status()
+            data = resp.json()
+            if "error" in data:
+                raise WeatherServiceError(f"Open-Meteo error: {data.get('reason', data['error'])}")
+
+        daily = data.get("daily", {})
+        highs = daily.get("temperature_2m_max", [])
+        lows = daily.get("temperature_2m_min", [])
+        times = daily.get("time", [])
+
+        weekly = {}
+        total_gdd = 0
+        daily_gdd = []
+        for i in range(len(times)):
+            if highs[i] is None or lows[i] is None:
+                continue
+            avg = (highs[i] + lows[i]) / 2
+            gdd = max(0, avg - base_temp_f)
+            total_gdd += gdd
+            daily_gdd.append({
+                "date": times[i],
+                "gdd": round(gdd, 1),
+                "cumulative": round(total_gdd, 1),
+            })
+            # Aggregate by ISO week
+            d = datetime.strptime(times[i], "%Y-%m-%d")
+            week_key = f"W{d.isocalendar()[1]}"
+            weekly[week_key] = weekly.get(week_key, 0) + gdd
+
+        weekly_gdd = [{"week": k, "gdd": round(v, 1)} for k, v in weekly.items()]
+
+        return {
+            "location": {"lat": lat, "lon": lon},
+            "period": {"start": start_date, "end": end_date},
+            "base_temp_f": base_temp_f,
+            "total_gdd": round(total_gdd, 1),
+            "weekly_gdd": weekly_gdd,
+            "daily_gdd": daily_gdd,
+        }
+    except httpx.HTTPStatusError as exc:
+        logger.error("Open-Meteo GDD HTTP error: %s", exc)
+        raise WeatherServiceError(f"Open-Meteo returned HTTP {exc.response.status_code}") from exc
+    except httpx.RequestError as exc:
+        logger.error("Open-Meteo GDD connection error: %s", exc)
+        raise WeatherServiceError(f"Cannot connect to Open-Meteo: {exc}") from exc
