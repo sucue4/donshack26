@@ -112,7 +112,8 @@ def _build_user_prompt(
     """Build the user message with all available data."""
     parts = ["## Farm Profile"]
     parts.append(f"- Location: lat={farm_profile.lat}, lon={farm_profile.lon}")
-    parts.append(f"- Fertilizers used: {', '.join(farm_profile.fertilizers_used) or 'None reported'}")
+    ferts = ", ".join(farm_profile.fertilizers_used) if farm_profile.fertilizers_used else "None reported"
+    parts.append(f"- Fertilizers used: {ferts}")
     parts.append("- Crop zones:")
     for zone in farm_profile.crop_zones:
         years = ", ".join(f"{y}: {c}" for y, c in sorted(zone.crops_by_year.items()))
