@@ -67,17 +67,17 @@ async def service_status():
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
             resp = await client.get(OPEN_METEO_FORECAST, params={"latitude": 0, "longitude": 0, "daily": "temperature_2m_max", "timezone": "auto", "forecast_days": 1})
-            results["weather"] = {"status": "ok" if resp.status_code == 200 else "error", "code": resp.status_code}
+            results["weather"] = {"status": "ok" if resp.status_code == 200 else "fallback", "code": resp.status_code}
     except Exception as e:
-        results["weather"] = {"status": "error", "detail": str(e)}
+        results["weather"] = {"status": "fallback", "detail": f"Using sample data -- {e}"}
 
     # Check SoilGrids
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
             resp = await client.get(SOILGRIDS_ENDPOINT, params={"lon": 0, "lat": 0, "property": "clay", "depth": "0-5cm", "value": "mean"})
-            results["soil"] = {"status": "ok" if resp.status_code in (200, 400) else "error", "code": resp.status_code}
+            results["soil"] = {"status": "ok" if resp.status_code in (200, 400) else "fallback", "code": resp.status_code}
     except Exception as e:
-        results["soil"] = {"status": "error", "detail": str(e)}
+        results["soil"] = {"status": "fallback", "detail": f"Using sample data -- {e}"}
 
     # Check Claude / Anthropic
     results["ai_advisor"] = {
