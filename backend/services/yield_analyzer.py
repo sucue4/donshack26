@@ -25,7 +25,7 @@ from models import (
 
 logger = logging.getLogger("ohdeere.services.yield_analyzer")
 
-MODEL_NAME = "claude-3-5-sonnet-20241022"
+MODEL_NAME = "claude-3-5-sonnet-20240620"
 
 CATEGORY_MODELS = {
     "weather": WeatherAnalysis,
