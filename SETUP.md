@@ -159,6 +159,7 @@ Key packages from `package.json`:
 | `electron` | Desktop application shell |
 | `webpack` | Module bundler |
 | `concurrently` | Run multiple commands in parallel |
+| `react-markdown` | Render markdown in AI Advisor chat responses |
 
 ---
 
