@@ -8,6 +8,8 @@ import {
 
 const SATELLITE_URL = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
 const SATELLITE_ATTR = 'Esri, Maxar, Earthstar Geographics';
+const LABELS_URL = 'https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png';
+const LABELS_ATTR = '&copy; OpenStreetMap contributors, &copy; CARTO';
 const STREET_URL = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
 const STREET_ATTR = '&copy; OpenStreetMap contributors';
 
@@ -49,6 +51,7 @@ export default function FieldMap() {
   const mapRef = useRef(null);
   const mapInstance = useRef(null);
   const layerRef = useRef(null);
+  const labelsLayerRef = useRef(null);
   const drawnLayersRef = useRef(null);
   const drawControlRef = useRef(null);
   const fieldPolygonsRef = useRef({});
@@ -114,6 +117,14 @@ export default function FieldMap() {
       maxZoom: 19,
     }).addTo(map);
     layerRef.current = layer;
+
+    // City/state/landmark labels overlay on satellite
+    const labels = L.tileLayer(LABELS_URL, {
+      attribution: LABELS_ATTR,
+      maxZoom: 19,
+      pane: 'overlayPane',
+    }).addTo(map);
+    labelsLayerRef.current = labels;
 
     const drawnItems = new L.FeatureGroup();
     map.addLayer(drawnItems);
@@ -260,10 +271,17 @@ export default function FieldMap() {
     if (!mapInstance.current || !layerRef.current) return;
     const L = window.L;
     mapInstance.current.removeLayer(layerRef.current);
+    if (labelsLayerRef.current) mapInstance.current.removeLayer(labelsLayerRef.current);
     const newView = mapView === 'satellite' ? 'street' : 'satellite';
     const url = newView === 'satellite' ? SATELLITE_URL : STREET_URL;
     const attr = newView === 'satellite' ? SATELLITE_ATTR : STREET_ATTR;
     layerRef.current = L.tileLayer(url, { attribution: attr, maxZoom: 19 }).addTo(mapInstance.current);
+    // Add labels overlay only for satellite view
+    if (newView === 'satellite') {
+      labelsLayerRef.current = L.tileLayer(LABELS_URL, { attribution: LABELS_ATTR, maxZoom: 19, pane: 'overlayPane' }).addTo(mapInstance.current);
+    } else {
+      labelsLayerRef.current = null;
+    }
     setMapView(newView);
   };
 

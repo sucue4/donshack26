@@ -87,7 +87,7 @@ export function RecommendationList({ items, maxItems = 5 }) {
   return (
     <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.7 }}>
       {items.slice(0, maxItems).map((item, i) => (
-        <li key={i}>{item}</li>
+        <li key={i}>{typeof item === 'string' ? item.replace(/\s*—\s*/g, ' - ') : item}</li>
       ))}
     </ul>
   );
@@ -113,13 +113,15 @@ export function DataTable({ headers, rows }) {
 }
 
 export function CategoryCard({ title, grade, riskLevel, score, insight, onClick }) {
+  const gradeColor = GRADE_COLORS[grade] || '#6b6b6b';
+
   return (
     <button
       onClick={onClick}
       className="category-card"
       style={{
         display: 'flex', flexDirection: 'column', gap: 0,
-        padding: '16px 18px',
+        padding: '18px 20px',
         background: 'var(--bg-secondary)',
         border: '1px solid var(--border-color)',
         borderRadius: 10,
@@ -128,32 +130,39 @@ export function CategoryCard({ title, grade, riskLevel, score, insight, onClick 
         fontFamily: 'inherit',
         color: 'var(--text-primary)',
         width: '100%',
-        transition: 'all 0.15s ease',
+        transition: 'all 0.2s ease',
+        boxShadow: 'var(--shadow-sm)',
       }}
       onMouseOver={(e) => {
         e.currentTarget.style.borderColor = 'var(--accent-primary)';
         e.currentTarget.style.boxShadow = 'var(--shadow-md)';
+        e.currentTarget.style.transform = 'translateY(-2px)';
       }}
       onMouseOut={(e) => {
         e.currentTarget.style.borderColor = 'var(--border-color)';
-        e.currentTarget.style.boxShadow = 'none';
+        e.currentTarget.style.boxShadow = 'var(--shadow-sm)';
+        e.currentTarget.style.transform = 'translateY(0)';
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
         <GradeBadge grade={grade} />
-        <div style={{ flex: 1 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, whiteSpace: 'nowrap' }}>
             <span style={{ fontSize: 14, fontWeight: 600 }}>{title}</span>
             <RiskBadge level={riskLevel} />
           </div>
         </div>
+        {score != null && (
+          <span style={{ fontSize: 22, fontWeight: 700, color: gradeColor, fontFamily: 'var(--font-display)' }}>
+            {score}
+          </span>
+        )}
       </div>
-      {score != null && <ScoreBar score={score} />}
-      <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.5, marginTop: 6 }}>
+      <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
         {insight}
       </div>
-      <div style={{ fontSize: 11, color: 'var(--accent-primary)', fontWeight: 600, marginTop: 8 }}>
-        View Details →
+      <div style={{ fontSize: 11, color: 'var(--accent-primary)', fontWeight: 600, marginTop: 10 }}>
+        View Details &rarr;
       </div>
     </button>
   );

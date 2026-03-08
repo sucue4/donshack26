@@ -4,8 +4,6 @@ import { useNavigate } from 'react-router-dom';
 const NAV_ITEMS = [
   { section: 'Overview' },
   { path: '/',           label: 'Yield Dashboard' },
-  { path: '/onboarding', label: 'Farm Setup' },
-  { path: '/field-map',  label: 'Field Map' },
   { section: 'Yield Analysis' },
   { path: '/weather',    label: 'Weather Forecasting' },
   { path: '/soil',       label: 'Soil Health' },

@@ -1,16 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import HudPanel from '../components/HudPanel';
 import MetricCard from '../components/MetricCard';
-import { GradeBadge, RiskBadge, ScoreBar, RecommendationList, DataTable } from '../components/YieldWidgets';
+import { GradeBadge, RiskBadge, DataTable } from '../components/YieldWidgets';
 import { getFields } from '../fieldStore';
 import { getProfile, isOnboarded } from '../farmProfileStore';
 import { getCachedCategory } from '../analysisStore';
-
-const TREND_COLORS = {
-  improving: 'var(--status-good)',
-  stable: 'var(--status-info)',
-  declining: 'var(--status-danger)',
-};
 
 function buildRequestBody(field, profile) {
   return {
@@ -23,6 +17,10 @@ function buildRequestBody(field, profile) {
     lat: field.lat,
     lon: field.lon,
   };
+}
+
+function cap(s) {
+  return s ? s.charAt(0).toUpperCase() + s.slice(1) : '--';
 }
 
 export default function SoilHealth() {
@@ -90,6 +88,10 @@ export default function SoilHealth() {
   const noFields = fields.length === 0;
   const needsOnboarding = selectedField && !isOnboarded(selectedField.id);
 
+  const nutrients = analysis?.nutrient_levels || [];
+  const recs = analysis?.recommendations || [];
+  const trend = analysis?.organic_matter_trend;
+
   return (
     <div className="fade-in">
       <p className="page-subtitle">Soil health analysis with nutrient levels, pH assessment, and fertilizer impact</p>
@@ -107,9 +109,6 @@ export default function SoilHealth() {
                 <option key={f.id} value={f.id}>{f.name} ({f.acres} ac)</option>
               ))}
             </select>
-            <span style={{ fontSize: 11, color: 'var(--text-dim)' }}>
-              {selectedField ? `${selectedField.lat}, ${selectedField.lon}` : ''}
-            </span>
             {!needsOnboarding && (
               <button className="btn btn-primary" onClick={() => runAnalysis()} disabled={loading} style={{ padding: '5px 14px', fontSize: 11 }}>
                 {loading ? 'Refreshing...' : 'Refresh'}
@@ -138,61 +137,41 @@ export default function SoilHealth() {
 
           {analysis && !loading && (
             <>
-              <HudPanel title="Soil Health Assessment" className="mb-3">
-                <div style={{ display: 'flex', alignItems: 'center', gap: 18, marginBottom: 14 }}>
-                  <GradeBadge grade={analysis.grade} size="large" />
-                  <div style={{ flex: 1 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                      <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>Soil Grade</span>
-                      <RiskBadge level={analysis.risk_level} />
-                    </div>
-                    <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{analysis.summary}</div>
+              <div className="assessment-banner">
+                <GradeBadge grade={analysis.grade} size="large" />
+                <div className="assessment-info">
+                  <div className="assessment-title-row">
+                    <h2 className="assessment-title">Soil Health Assessment</h2>
+                    <RiskBadge level={analysis.risk_level} />
                   </div>
+                  <p className="assessment-summary">{(analysis.summary || '').replace(/\s*—\s*/g, ' - ')}</p>
                 </div>
-              </HudPanel>
+              </div>
 
-              <div className="metric-grid" style={{ marginBottom: 18 }}>
-                <MetricCard label="Grade" value={analysis.grade} change="Soil assessment" changeType="neutral" />
-                <MetricCard label="Risk Level" value={analysis.risk_level} change="Current conditions" changeType={analysis.risk_level === 'low' ? 'positive' : analysis.risk_level === 'critical' ? 'negative' : 'neutral'} />
+              <div className="metric-grid mb-3">
                 <MetricCard
                   label="Organic Matter"
-                  value={analysis.organic_matter_trend || '--'}
-                  change="Trend direction"
-                  changeType={analysis.organic_matter_trend === 'improving' ? 'positive' : analysis.organic_matter_trend === 'declining' ? 'negative' : 'neutral'}
+                  value={cap(trend)}
+                  change="Current trend"
+                  changeType={trend === 'improving' ? 'positive' : trend === 'declining' ? 'negative' : 'neutral'}
                 />
-                <MetricCard label="Nutrients Tracked" value={(analysis.nutrient_levels || []).length.toString()} change="Measured nutrients" changeType="neutral" />
+                <MetricCard label="Nutrients Tracked" value={nutrients.length.toString()} change="Measured levels" changeType="neutral" />
+                <MetricCard label="Recommendations" value={recs.length.toString()} change="Action items" changeType="neutral" />
               </div>
 
-              <div className="grid-2" style={{ marginBottom: 18 }}>
-                <HudPanel title="pH Assessment">
-                  <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6, padding: '8px 0' }}>
-                    {analysis.ph_assessment}
+              {analysis.ph_assessment && (
+                <HudPanel title="pH Assessment" className="mb-3">
+                  <div className="info-block">
+                    {(analysis.ph_assessment || '').replace(/\s*—\s*/g, ' - ')}
                   </div>
                 </HudPanel>
+              )}
 
-                <HudPanel title="Organic Matter Trend">
-                  <div style={{ textAlign: 'center', padding: '16px 0' }}>
-                    <div style={{
-                      display: 'inline-block',
-                      padding: '8px 20px',
-                      borderRadius: 8,
-                      background: TREND_COLORS[analysis.organic_matter_trend] || 'var(--text-dim)',
-                      color: '#fff',
-                      fontSize: 16,
-                      fontWeight: 700,
-                      textTransform: 'capitalize',
-                    }}>
-                      {analysis.organic_matter_trend}
-                    </div>
-                  </div>
-                </HudPanel>
-              </div>
-
-              {analysis.nutrient_levels && analysis.nutrient_levels.length > 0 && (
+              {nutrients.length > 0 && (
                 <HudPanel title="Nutrient Levels" className="mb-3">
                   <DataTable
                     headers={['Nutrient', 'Current Level', 'Value', 'Unit', 'Recommendation']}
-                    rows={analysis.nutrient_levels.map((n) => [
+                    rows={nutrients.map((n) => [
                       <span key={n.nutrient} style={{ fontWeight: 600 }}>{n.nutrient}</span>,
                       n.current_level,
                       n.value,
@@ -203,15 +182,40 @@ export default function SoilHealth() {
                 </HudPanel>
               )}
 
-              <HudPanel title="Fertilizer Impact Assessment" className="mb-3">
-                <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6, padding: '8px 0' }}>
-                  {analysis.fertilizer_impact_assessment}
-                </div>
-              </HudPanel>
+              {analysis.fertilizer_impact_assessment && (
+                <HudPanel title="Fertilizer Impact Assessment" className="mb-3">
+                  <div className="info-block">
+                    {(analysis.fertilizer_impact_assessment || '').replace(/\s*—\s*/g, ' - ')}
+                  </div>
+                </HudPanel>
+              )}
 
-              {analysis.recommendations && analysis.recommendations.length > 0 && (
+              {recs.length > 0 && (
                 <HudPanel title="Recommendations">
-                  <RecommendationList items={analysis.recommendations} />
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {recs.map((rec, i) => {
+                      const cleanRec = rec.replace(/\s*—\s*/g, ' - ');
+                      const isPH = /ph|lime|acid|alkalin/i.test(cleanRec);
+                      const isNutrient = /nitrogen|phosph|potassium|nutrient|fertili|NPK/i.test(cleanRec);
+                      const isOrganic = /organic|carbon|compost|cover crop|SOC/i.test(cleanRec);
+                      const dotColor = isPH ? '#4a7a8c' : isNutrient ? 'var(--status-warning)' : isOrganic ? 'var(--status-good)' : 'var(--accent-primary)';
+                      return (
+                        <div key={i} style={{
+                          display: 'flex', alignItems: 'flex-start', gap: 12,
+                          padding: '12px 16px', borderRadius: 8,
+                          background: 'var(--bg-tertiary)',
+                        }}>
+                          <span style={{
+                            width: 8, height: 8, borderRadius: '50%', flexShrink: 0, marginTop: 4,
+                            background: dotColor,
+                          }} />
+                          <span style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+                            {cleanRec}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </HudPanel>
               )}
             </>
@@ -221,7 +225,7 @@ export default function SoilHealth() {
             <div style={{ textAlign: 'center', padding: 32, color: 'var(--text-dim)' }}>
               <div style={{ fontSize: 14, marginBottom: 8 }}>Ready to analyze</div>
               <div style={{ fontSize: 12 }}>
-                Click "Run Analysis" to get soil health data, nutrient levels, and fertilizer impact assessments.
+                Click "Refresh" to get soil health data, nutrient levels, and fertilizer impact assessments.
               </div>
             </div>
           )}

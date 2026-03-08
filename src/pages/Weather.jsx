@@ -141,9 +141,6 @@ export default function Weather() {
                 <option key={f.id} value={f.id}>{f.name} ({f.acres} ac)</option>
               ))}
             </select>
-            <span style={{ fontSize: 11, color: 'var(--text-dim)' }}>
-              {selectedField ? `${selectedField.lat}, ${selectedField.lon}` : ''}
-            </span>
             <button className="btn btn-primary" onClick={fetchWeather} style={{ padding: '5px 12px', fontSize: 11 }}>
               {loading ? 'Loading...' : 'Update'}
             </button>
@@ -153,13 +150,13 @@ export default function Weather() {
             <div className="data-notice data-notice-error">{error}</div>
           )}
 
-          <div className="metric-grid" style={{ marginBottom: 18 }}>
+          <div className="metric-grid" style={{ marginBottom: 16 }}>
             <MetricCard label="Temperature" value={summary.tempHigh || '--'} unit="&deg;C" change={`High: ${summary.tempHigh || '--'}\u00B0C / Low: ${summary.tempLow || '--'}\u00B0C`} changeType="neutral" />
             <MetricCard label="Precipitation (7d)" value={summary.rain7d || '--'} unit="mm" change="Total 7-day rainfall" changeType="neutral" />
             <MetricCard label="ET0 (Today)" value={summary.et0 || '--'} unit="mm" change="Evapotranspiration" changeType="neutral" />
           </div>
 
-          <div className="grid-2" style={{ marginBottom: 18 }}>
+          <div className="grid-2" style={{ marginBottom: 16 }}>
             <HudPanel title="Today -- Hourly Temperature">
               {hourlyData.length === 0 && !loading && (
                 <div className="data-notice">No hourly data available</div>

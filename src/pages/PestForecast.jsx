@@ -84,6 +84,11 @@ export default function PestForecast() {
   const noFields = fields.length === 0;
   const needsOnboarding = selectedField && !isOnboarded(selectedField.id);
 
+  const threats = analysis?.active_threats || [];
+  const spreadRisks = analysis?.regional_spread_risks || [];
+  const cropSuggestions = analysis?.low_impact_crop_suggestions || [];
+  const preventive = analysis?.preventive_recommendations || [];
+
   return (
     <div className="fade-in">
       <p className="page-subtitle">Pest threat analysis and resistance-based crop recommendations</p>
@@ -101,9 +106,6 @@ export default function PestForecast() {
                 <option key={f.id} value={f.id}>{f.name} ({f.acres} ac)</option>
               ))}
             </select>
-            <span style={{ fontSize: 11, color: 'var(--text-dim)' }}>
-              {selectedField ? `${selectedField.lat}, ${selectedField.lon}` : ''}
-            </span>
             {!needsOnboarding && (
               <button className="btn btn-primary" onClick={() => runAnalysis()} disabled={loading} style={{ padding: '5px 14px', fontSize: 11 }}>
                 {loading ? 'Refreshing...' : 'Refresh'}
@@ -132,47 +134,57 @@ export default function PestForecast() {
 
           {analysis && !loading && (
             <>
-              <HudPanel title="Pest Assessment" className="mb-3">
-                <div style={{ display: 'flex', alignItems: 'center', gap: 18, marginBottom: 14 }}>
-                  <GradeBadge grade={analysis.grade} size="large" />
-                  <div style={{ flex: 1 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                      <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>Pest Grade</span>
-                      <RiskBadge level={analysis.risk_level} />
-                    </div>
-                    <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{analysis.summary}</div>
+              <div className="assessment-banner">
+                <GradeBadge grade={analysis.grade} size="large" />
+                <div className="assessment-info">
+                  <div className="assessment-title-row">
+                    <h2 className="assessment-title">Pest Assessment</h2>
+                    <RiskBadge level={analysis.risk_level} />
                   </div>
+                  <p className="assessment-summary">{(analysis.summary || '').replace(/\s*—\s*/g, ' - ')}</p>
                 </div>
-              </HudPanel>
-
-              <div className="metric-grid" style={{ marginBottom: 18 }}>
-                <MetricCard label="Grade" value={analysis.grade} change="Pest assessment" changeType="neutral" />
-                <MetricCard label="Risk Level" value={analysis.risk_level} change="Current conditions" changeType={analysis.risk_level === 'low' ? 'positive' : analysis.risk_level === 'critical' ? 'negative' : 'neutral'} />
-                <MetricCard label="Active Threats" value={(analysis.active_threats || []).length.toString()} change="Detected pests" changeType="neutral" />
-                <MetricCard label="Regional Risks" value={(analysis.regional_spread_risks || []).length.toString()} change="Nearby threats" changeType="neutral" />
               </div>
 
-              {analysis.active_threats && analysis.active_threats.length > 0 && (
+              <div className="metric-grid mb-3">
+                <MetricCard label="Active Threats" value={threats.length.toString()} change="Detected pests" changeType="neutral" />
+                <MetricCard label="Regional Risks" value={spreadRisks.length.toString()} change="Nearby threats" changeType="neutral" />
+                <MetricCard label="Resistant Crops" value={cropSuggestions.length.toString()} change="Low-impact options" changeType="neutral" />
+              </div>
+
+              {threats.length > 0 && (
                 <HudPanel title="Active Threats" className="mb-3">
-                  <DataTable
-                    headers={['Pest', 'Type', 'Risk Level', 'Affected Crops', 'Source Direction', 'Description']}
-                    rows={analysis.active_threats.map((t) => [
-                      <span key={t.pest_name} style={{ fontWeight: 600 }}>{t.pest_name}</span>,
-                      t.threat_type,
-                      <RiskBadge key={`risk-${t.pest_name}`} level={t.risk_level} />,
-                      (t.affected_crops || []).join(', '),
-                      t.source_direction,
-                      t.description,
-                    ])}
-                  />
+                  {threats.map((t) => (
+                    <div key={t.pest_name} className="crop-card">
+                      <div className="crop-card-header">
+                        <span className="crop-card-name">{t.pest_name}</span>
+                        <RiskBadge level={t.risk_level} />
+                        <span style={{ fontSize: 11, color: 'var(--text-dim)', marginLeft: 'auto' }}>
+                          {t.threat_type} · {t.source_direction}
+                        </span>
+                      </div>
+                      <div className="crop-card-detail">{t.description}</div>
+                      {(t.affected_crops || []).length > 0 && (
+                        <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
+                          {t.affected_crops.map((c) => (
+                            <span key={c} style={{
+                              padding: '3px 10px', borderRadius: 6, fontSize: 10, fontWeight: 600,
+                              background: 'rgba(61,122,74,0.1)', color: 'var(--accent-primary)',
+                            }}>
+                              {c}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
                 </HudPanel>
               )}
 
-              {analysis.regional_spread_risks && analysis.regional_spread_risks.length > 0 && (
+              {spreadRisks.length > 0 && (
                 <HudPanel title="Regional Spread Risks" className="mb-3">
                   <DataTable
-                    headers={['Pest', 'Type', 'Risk Level', 'Affected Crops', 'Source Direction', 'Description']}
-                    rows={analysis.regional_spread_risks.map((r) => [
+                    headers={['Pest', 'Type', 'Risk Level', 'Affected Crops', 'Source', 'Description']}
+                    rows={spreadRisks.map((r) => [
                       <span key={r.pest_name} style={{ fontWeight: 600 }}>{r.pest_name}</span>,
                       r.threat_type,
                       <RiskBadge key={`risk-${r.pest_name}`} level={r.risk_level} />,
@@ -184,23 +196,23 @@ export default function PestForecast() {
                 </HudPanel>
               )}
 
-              {analysis.low_impact_crop_suggestions && analysis.low_impact_crop_suggestions.length > 0 && (
+              {cropSuggestions.length > 0 && (
                 <HudPanel title="Low-Impact Crop Suggestions" className="mb-3">
-                  {analysis.low_impact_crop_suggestions.map((s) => (
-                    <div key={s.crop} style={{ marginBottom: 12, padding: '10px 14px', background: 'var(--bg-tertiary)', borderRadius: 8 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
-                        <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{s.crop}</span>
+                  {cropSuggestions.map((s) => (
+                    <div key={s.crop} className="crop-card">
+                      <div className="crop-card-header">
+                        <span className="crop-card-name">{s.crop}</span>
                       </div>
                       <ScoreBar score={s.pest_resistance_score} label="Pest Resistance Score" />
-                      <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 4 }}>{s.rationale}</div>
+                      <div className="crop-card-detail">{s.rationale}</div>
                     </div>
                   ))}
                 </HudPanel>
               )}
 
-              {analysis.preventive_recommendations && analysis.preventive_recommendations.length > 0 && (
+              {preventive.length > 0 && (
                 <HudPanel title="Preventive Recommendations">
-                  <RecommendationList items={analysis.preventive_recommendations} />
+                  <RecommendationList items={preventive} />
                 </HudPanel>
               )}
             </>
@@ -210,7 +222,7 @@ export default function PestForecast() {
             <div style={{ textAlign: 'center', padding: 32, color: 'var(--text-dim)' }}>
               <div style={{ fontSize: 14, marginBottom: 8 }}>Ready to analyze</div>
               <div style={{ fontSize: 12 }}>
-                Click "Run Analysis" to get pest forecasting data and crop resistance recommendations.
+                Click "Refresh" to get pest forecasting data and crop resistance recommendations.
               </div>
             </div>
           )}

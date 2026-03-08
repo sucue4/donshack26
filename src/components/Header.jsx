@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 
-export default function Header({ title, onToggleDebug }) {
+export default function Header({ title }) {
   const [time, setTime] = useState(new Date());
   const [backendUp, setBackendUp] = useState(null);
 
@@ -30,10 +30,6 @@ export default function Header({ title, onToggleDebug }) {
     hour: '2-digit', minute: '2-digit',
   });
 
-  const handleMinimize = () => window.electronAPI?.minimize();
-  const handleMaximize = () => window.electronAPI?.maximize();
-  const handleClose = () => window.electronAPI?.close();
-
   return (
     <header className="header">
       <div className="header-left">
@@ -47,18 +43,6 @@ export default function Header({ title, onToggleDebug }) {
           <span>{backendUp === null ? 'Checking...' : backendUp ? 'Online' : 'Backend Offline'}</span>
           <span style={{ margin: '0 4px', color: '#e2e0dc' }}>|</span>
           <span>{dateStr} &middot; {timeStr}</span>
-        </div>
-        {onToggleDebug && (
-          <button className="btn" onClick={onToggleDebug}
-            style={{ padding: '3px 8px', fontSize: 10 }}
-            title="Toggle Debug Panel (Ctrl+Shift+D)">
-            Debug
-          </button>
-        )}
-        <div className="window-controls">
-          <button className="window-btn minimize" onClick={handleMinimize} />
-          <button className="window-btn maximize" onClick={handleMaximize} />
-          <button className="window-btn close" onClick={handleClose} />
         </div>
       </div>
     </header>

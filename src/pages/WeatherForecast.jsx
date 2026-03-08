@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import HudPanel from '../components/HudPanel';
 import MetricCard from '../components/MetricCard';
-import { GradeBadge, RiskBadge, ScoreBar, RecommendationList, DataTable } from '../components/YieldWidgets';
+import { GradeBadge, RiskBadge, DataTable } from '../components/YieldWidgets';
 import { getFields } from '../fieldStore';
 import { getProfile, isOnboarded } from '../farmProfileStore';
 import { getCachedCategory } from '../analysisStore';
@@ -67,7 +67,6 @@ export default function WeatherForecast() {
 
   useEffect(() => {
     if (!selectedField || !isOnboarded(selectedField.id)) return;
-    // Use cached data from Dashboard if available
     const cached = getCachedCategory(selectedField.id, 'weather');
     if (cached) {
       setAnalysis(cached);
@@ -84,6 +83,10 @@ export default function WeatherForecast() {
 
   const noFields = fields.length === 0;
   const needsOnboarding = selectedField && !isOnboarded(selectedField.id);
+
+  const events = analysis?.upcoming_events || [];
+  const impacts = analysis?.crop_impacts || [];
+  const mitigations = analysis?.mitigation_recommendations || [];
 
   return (
     <div className="fade-in">
@@ -102,9 +105,6 @@ export default function WeatherForecast() {
                 <option key={f.id} value={f.id}>{f.name} ({f.acres} ac)</option>
               ))}
             </select>
-            <span style={{ fontSize: 11, color: 'var(--text-dim)' }}>
-              {selectedField ? `${selectedField.lat}, ${selectedField.lon}` : ''}
-            </span>
             {!needsOnboarding && (
               <button className="btn btn-primary" onClick={() => fetchFromAPI()} disabled={loading} style={{ padding: '5px 14px', fontSize: 11 }}>
                 {loading ? 'Refreshing...' : 'Refresh'}
@@ -133,31 +133,28 @@ export default function WeatherForecast() {
 
           {analysis && !loading && (
             <>
-              <HudPanel title="Weather Assessment" className="mb-3">
-                <div style={{ display: 'flex', alignItems: 'center', gap: 18, marginBottom: 14 }}>
-                  <GradeBadge grade={analysis.grade} size="large" />
-                  <div style={{ flex: 1 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                      <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>Weather Grade</span>
-                      <RiskBadge level={analysis.risk_level} />
-                    </div>
-                    <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{analysis.summary}</div>
+              <div className="assessment-banner">
+                <GradeBadge grade={analysis.grade} size="large" />
+                <div className="assessment-info">
+                  <div className="assessment-title-row">
+                    <h2 className="assessment-title">Weather Assessment</h2>
+                    <RiskBadge level={analysis.risk_level} />
                   </div>
+                  <p className="assessment-summary">{(analysis.summary || '').replace(/\s*—\s*/g, ' - ')}</p>
                 </div>
-              </HudPanel>
-
-              <div className="metric-grid" style={{ marginBottom: 18 }}>
-                <MetricCard label="Grade" value={analysis.grade} change="Weather assessment" changeType="neutral" />
-                <MetricCard label="Risk Level" value={analysis.risk_level} change="Current conditions" changeType={analysis.risk_level === 'low' ? 'positive' : analysis.risk_level === 'critical' ? 'negative' : 'neutral'} />
-                <MetricCard label="Upcoming Events" value={(analysis.upcoming_events || []).length.toString()} change="Forecast period" changeType="neutral" />
-                <MetricCard label="Crops Impacted" value={(analysis.crop_impacts || []).length.toString()} change="Affected crops" changeType="neutral" />
               </div>
 
-              {analysis.upcoming_events && analysis.upcoming_events.length > 0 && (
+              <div className="metric-grid mb-3">
+                <MetricCard label="Weather Events" value={events.length.toString()} change="Forecast period" changeType="neutral" />
+                <MetricCard label="Crops Analyzed" value={impacts.length.toString()} change="Impact assessment" changeType="neutral" />
+                <MetricCard label="Action Items" value={mitigations.length.toString()} change="Mitigation steps" changeType="neutral" />
+              </div>
+
+              {events.length > 0 && (
                 <HudPanel title="Upcoming Weather Events" className="mb-3">
                   <DataTable
                     headers={['Date', 'Event Type', 'Severity', 'Description']}
-                    rows={analysis.upcoming_events.map((evt) => [
+                    rows={events.map((evt) => [
                       evt.date,
                       evt.event_type,
                       evt.severity,
@@ -167,25 +164,59 @@ export default function WeatherForecast() {
                 </HudPanel>
               )}
 
-              {analysis.crop_impacts && analysis.crop_impacts.length > 0 && (
+              {impacts.length > 0 && (
                 <HudPanel title="Crop Impact Simulation" className="mb-3">
-                  <DataTable
-                    headers={['Crop', 'Impact', 'Yield Impact %', 'Mitigation Action']}
-                    rows={analysis.crop_impacts.map((ci) => [
-                      ci.crop,
-                      ci.impact_description,
-                      <span key={ci.crop} style={{ color: ci.estimated_yield_impact_pct < 0 ? 'var(--status-danger)' : 'var(--status-good)', fontWeight: 600 }}>
-                        {ci.estimated_yield_impact_pct > 0 ? '+' : ''}{ci.estimated_yield_impact_pct}%
-                      </span>,
-                      ci.mitigation_action,
-                    ])}
-                  />
+                  {impacts.map((ci) => (
+                    <div key={ci.crop} className="crop-card">
+                      <div className="crop-card-header">
+                        <span className="crop-card-name">{ci.crop}</span>
+                        <span className="crop-card-tag" style={{
+                          background: ci.estimated_yield_impact_pct < -5 ? 'var(--status-danger)'
+                            : ci.estimated_yield_impact_pct < 0 ? 'var(--status-warning)'
+                            : 'var(--status-good)',
+                        }}>
+                          {ci.estimated_yield_impact_pct >= 0 ? 'Favorable' : ci.estimated_yield_impact_pct > -5 ? 'Minor Impact' : 'At Risk'}
+                        </span>
+                        <span className="crop-card-stat" style={{
+                          color: ci.estimated_yield_impact_pct < 0 ? 'var(--status-danger)' : 'var(--status-good)',
+                        }}>
+                          {ci.estimated_yield_impact_pct > 0 ? '+' : ''}{ci.estimated_yield_impact_pct}% yield
+                        </span>
+                      </div>
+                      <div className="crop-card-detail">{ci.impact_description}</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 4 }}>{ci.mitigation_action}</div>
+                    </div>
+                  ))}
                 </HudPanel>
               )}
 
-              {analysis.mitigation_recommendations && analysis.mitigation_recommendations.length > 0 && (
-                <HudPanel title="Mitigation Recommendations">
-                  <RecommendationList items={analysis.mitigation_recommendations} />
+              {mitigations.length > 0 && (
+                <HudPanel title="Mitigation Recommendations" className="mb-3">
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {mitigations.map((rec, i) => {
+                      const cleanRec = rec.replace(/\s*—\s*/g, ' - ');
+                      const isFrost = /frost/i.test(cleanRec);
+                      const isHeat = /heat|temperature/i.test(cleanRec);
+                      const isWater = /irrigat|moisture|water|deficit|drainage/i.test(cleanRec);
+                      const isWind = /wind|lodging/i.test(cleanRec);
+                      const dotColor = isFrost ? '#4a7a8c' : isHeat ? 'var(--status-danger)' : isWater ? 'var(--status-warning)' : isWind ? '#8b6914' : 'var(--status-good)';
+                      return (
+                        <div key={i} style={{
+                          display: 'flex', alignItems: 'flex-start', gap: 12,
+                          padding: '12px 16px', borderRadius: 8,
+                          background: 'var(--bg-tertiary)',
+                        }}>
+                          <span style={{
+                            width: 8, height: 8, borderRadius: '50%', flexShrink: 0, marginTop: 4,
+                            background: dotColor,
+                          }} />
+                          <span style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+                            {cleanRec}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </HudPanel>
               )}
             </>
@@ -195,7 +226,7 @@ export default function WeatherForecast() {
             <div style={{ textAlign: 'center', padding: 32, color: 'var(--text-dim)' }}>
               <div style={{ fontSize: 14, marginBottom: 8 }}>Ready to analyze</div>
               <div style={{ fontSize: 12 }}>
-                Click "Run Analysis" to get weather forecasting data and crop impact assessments.
+                Click "Refresh" to get weather forecasting data and crop impact assessments.
               </div>
             </div>
           )}

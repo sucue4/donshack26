@@ -90,6 +90,11 @@ export default function MonocultureRisk() {
   const noFields = fields.length === 0;
   const needsOnboarding = selectedField && !isOnboarded(selectedField.id);
 
+  const history = analysis?.farmer_crop_history || [];
+  const regional = analysis?.regional_crop_data || [];
+  const diversify = analysis?.diversification_suggestions || [];
+  const recs = analysis?.recommendations || [];
+
   return (
     <div className="fade-in">
       <p className="page-subtitle">Monoculture risk assessment and crop diversification recommendations</p>
@@ -107,9 +112,6 @@ export default function MonocultureRisk() {
                 <option key={f.id} value={f.id}>{f.name} ({f.acres} ac)</option>
               ))}
             </select>
-            <span style={{ fontSize: 11, color: 'var(--text-dim)' }}>
-              {selectedField ? `${selectedField.lat}, ${selectedField.lon}` : ''}
-            </span>
             {!needsOnboarding && (
               <button className="btn btn-primary" onClick={() => runAnalysis()} disabled={loading} style={{ padding: '5px 14px', fontSize: 11 }}>
                 {loading ? 'Refreshing...' : 'Refresh'}
@@ -138,42 +140,32 @@ export default function MonocultureRisk() {
 
           {analysis && !loading && (
             <>
-              <HudPanel title="Monoculture Assessment" className="mb-3">
-                <div style={{ display: 'flex', alignItems: 'center', gap: 18, marginBottom: 14 }}>
-                  <GradeBadge grade={analysis.grade} size="large" />
-                  <div style={{ flex: 1 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                      <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>Monoculture Grade</span>
-                      <RiskBadge level={analysis.risk_level} />
-                    </div>
-                    <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{analysis.summary}</div>
+              <div className="assessment-banner">
+                <GradeBadge grade={analysis.grade} size="large" />
+                <div className="assessment-info">
+                  <div className="assessment-title-row">
+                    <h2 className="assessment-title">Monoculture Assessment</h2>
+                    <RiskBadge level={analysis.risk_level} />
                   </div>
+                  <p className="assessment-summary">{(analysis.summary || '').replace(/\s*—\s*/g, ' - ')}</p>
                 </div>
-              </HudPanel>
-
-              <div className="metric-grid" style={{ marginBottom: 18 }}>
-                <MetricCard label="Grade" value={analysis.grade} change="Monoculture assessment" changeType="neutral" />
-                <MetricCard label="Risk Level" value={analysis.risk_level} change="Current status" changeType={analysis.risk_level === 'low' ? 'positive' : analysis.risk_level === 'critical' ? 'negative' : 'neutral'} />
-                <MetricCard label="Same Crop Years" value={(analysis.consecutive_same_crop_years || 0).toString()} unit="yr" change="Consecutive seasons" changeType={analysis.consecutive_same_crop_years > 2 ? 'negative' : 'positive'} />
-                <MetricCard label="Diversification Options" value={(analysis.diversification_suggestions || []).length.toString()} change="Crop suggestions" changeType="neutral" />
               </div>
 
-              <div className="grid-2" style={{ marginBottom: 18 }}>
-                <HudPanel title="Monoculture Risk Score">
-                  <ScoreBar score={analysis.risk_score || 0} label="Risk Score (higher = more risk)" />
-                  <div style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 8 }}>
-                    Score reflects the degree of monoculture risk based on crop history and regional data.
-                  </div>
-                </HudPanel>
+              <div className="metric-grid mb-3">
+                <MetricCard label="Risk Score" value={(analysis.risk_score || 0).toString()} unit="/100" change="Monoculture risk index" changeType={analysis.risk_score > 50 ? 'negative' : analysis.risk_score > 25 ? 'neutral' : 'positive'} />
+                <MetricCard label="Same Crop Years" value={(analysis.consecutive_same_crop_years || 0).toString()} unit="yr" change="Consecutive seasons" changeType={analysis.consecutive_same_crop_years > 2 ? 'negative' : 'positive'} />
+                <MetricCard label="Alternatives" value={diversify.length.toString()} change="Diversification options" changeType="neutral" />
+              </div>
 
+              <div className="grid-2 mb-3">
                 <HudPanel title="Crop History">
-                  {analysis.farmer_crop_history && analysis.farmer_crop_history.length > 0 ? (
-                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', padding: '8px 0' }}>
-                      {analysis.farmer_crop_history.map((crop, i) => (
+                  {history.length > 0 ? (
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                      {history.map((crop, i) => (
                         <span key={i} style={{
-                          padding: '4px 12px',
+                          padding: '6px 14px',
                           borderRadius: 6,
-                          background: 'var(--bg-input)',
+                          background: 'var(--bg-tertiary)',
                           fontSize: 12,
                           fontWeight: 500,
                           color: 'var(--text-primary)',
@@ -184,56 +176,61 @@ export default function MonocultureRisk() {
                       ))}
                     </div>
                   ) : (
-                    <div style={{ fontSize: 12, color: 'var(--text-dim)', padding: '8px 0' }}>No crop history available</div>
+                    <div style={{ fontSize: 12, color: 'var(--text-dim)' }}>No crop history available</div>
                   )}
+                </HudPanel>
+
+                <HudPanel title="Risk Score Breakdown">
+                  <ScoreBar score={analysis.risk_score || 0} label="Risk Score (higher = more risk)" />
+                  <div style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 8 }}>
+                    Based on crop history and regional diversity data.
+                  </div>
                 </HudPanel>
               </div>
 
-              {analysis.regional_crop_data && analysis.regional_crop_data.length > 0 && (
+              {regional.length > 0 && (
                 <HudPanel title="Regional Crop Data" className="mb-3">
                   <DataTable
                     headers={['Region', 'Primary Crop', 'Crop %', 'Acreage']}
-                    rows={analysis.regional_crop_data.map((r) => [
+                    rows={regional.map((r) => [
                       r.region,
                       r.primary_crop,
                       <span key={r.region} style={{ fontWeight: 600, color: r.crop_percentage > 60 ? 'var(--status-danger)' : 'var(--status-good)' }}>
                         {r.crop_percentage}%
                       </span>,
-                      r.acreage ? r.acreage.toLocaleString() : '—',
+                      r.acreage ? r.acreage.toLocaleString() : '-',
                     ])}
                   />
                 </HudPanel>
               )}
 
-              {analysis.diversification_suggestions && analysis.diversification_suggestions.length > 0 && (
+              {diversify.length > 0 && (
                 <HudPanel title="Diversification Suggestions" className="mb-3">
-                  {analysis.diversification_suggestions.map((s) => (
-                    <div key={s.crop} style={{ marginBottom: 12, padding: '10px 14px', background: 'var(--bg-tertiary)', borderRadius: 8 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
-                        <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{s.crop}</span>
-                        <span style={{
-                          fontSize: 10, padding: '2px 8px', borderRadius: 10,
+                  {diversify.map((s) => (
+                    <div key={s.crop} className="crop-card">
+                      <div className="crop-card-header">
+                        <span className="crop-card-name">{s.crop}</span>
+                        <span className="crop-card-tag" style={{
                           background: ROTATION_FIT_COLORS[s.rotation_fit] || 'var(--text-dim)',
-                          color: '#fff', fontWeight: 600, textTransform: 'uppercase',
                         }}>
                           {s.rotation_fit} fit
                         </span>
                         {s.estimated_yield_benefit_pct != null && (
-                          <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--status-good)' }}>
+                          <span className="crop-card-stat" style={{ color: 'var(--status-good)' }}>
                             +{s.estimated_yield_benefit_pct}% yield
                           </span>
                         )}
                       </div>
-                      <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 4 }}>{s.benefit}</div>
-                      <div style={{ fontSize: 11, color: 'var(--text-dim)' }}>{s.rationale}</div>
+                      <div className="crop-card-detail">{s.benefit}</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 4 }}>{s.rationale}</div>
                     </div>
                   ))}
                 </HudPanel>
               )}
 
-              {analysis.recommendations && analysis.recommendations.length > 0 && (
+              {recs.length > 0 && (
                 <HudPanel title="Recommendations">
-                  <RecommendationList items={analysis.recommendations} />
+                  <RecommendationList items={recs} />
                 </HudPanel>
               )}
             </>
@@ -243,7 +240,7 @@ export default function MonocultureRisk() {
             <div style={{ textAlign: 'center', padding: 32, color: 'var(--text-dim)' }}>
               <div style={{ fontSize: 14, marginBottom: 8 }}>Ready to analyze</div>
               <div style={{ fontSize: 12 }}>
-                Click "Run Analysis" to get monoculture risk data and crop diversification recommendations.
+                Click "Refresh" to get monoculture risk data and crop diversification recommendations.
               </div>
             </div>
           )}
