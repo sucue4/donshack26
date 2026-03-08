@@ -112,12 +112,13 @@ export function DataTable({ headers, rows }) {
   );
 }
 
-export function CategoryCard({ title, grade, riskLevel, summary, onClick }) {
+export function CategoryCard({ title, grade, riskLevel, score, insight, onClick }) {
   return (
     <button
       onClick={onClick}
+      className="category-card"
       style={{
-        display: 'flex', alignItems: 'center', gap: 14,
+        display: 'flex', flexDirection: 'column', gap: 0,
         padding: '16px 18px',
         background: 'var(--bg-secondary)',
         border: '1px solid var(--border-color)',
@@ -138,15 +139,21 @@ export function CategoryCard({ title, grade, riskLevel, summary, onClick }) {
         e.currentTarget.style.boxShadow = 'none';
       }}
     >
-      <GradeBadge grade={grade} />
-      <div style={{ flex: 1 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-          <span style={{ fontSize: 14, fontWeight: 600 }}>{title}</span>
-          <RiskBadge level={riskLevel} />
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
+        <GradeBadge grade={grade} />
+        <div style={{ flex: 1 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 14, fontWeight: 600 }}>{title}</span>
+            <RiskBadge level={riskLevel} />
+          </div>
         </div>
-        <div style={{ fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.4 }}>
-          {summary}
-        </div>
+      </div>
+      {score != null && <ScoreBar score={score} />}
+      <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.5, marginTop: 6 }}>
+        {insight}
+      </div>
+      <div style={{ fontSize: 11, color: 'var(--accent-primary)', fontWeight: 600, marginTop: 8 }}>
+        View Details →
       </div>
     </button>
   );

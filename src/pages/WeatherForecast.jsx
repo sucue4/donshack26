@@ -4,6 +4,7 @@ import MetricCard from '../components/MetricCard';
 import { GradeBadge, RiskBadge, ScoreBar, RecommendationList, DataTable } from '../components/YieldWidgets';
 import { getFields } from '../fieldStore';
 import { getProfile, isOnboarded } from '../farmProfileStore';
+import { getCachedCategory } from '../analysisStore';
 
 function buildRequestBody(field, profile) {
   return {
@@ -36,7 +37,7 @@ export default function WeatherForecast() {
     return () => window.removeEventListener('ohdeere-fields-changed', loadFields);
   }, []);
 
-  const runAnalysis = async (field) => {
+  const fetchFromAPI = async (field) => {
     const f = field || selectedField;
     if (!f) return;
     const profile = getProfile(f.id);
@@ -65,9 +66,14 @@ export default function WeatherForecast() {
   };
 
   useEffect(() => {
-    if (selectedField && isOnboarded(selectedField.id)) {
-      runAnalysis(selectedField);
+    if (!selectedField || !isOnboarded(selectedField.id)) return;
+    // Use cached data from Dashboard if available
+    const cached = getCachedCategory(selectedField.id, 'weather');
+    if (cached) {
+      setAnalysis(cached);
+      return;
     }
+    fetchFromAPI(selectedField);
   }, [selectedField?.id]);
 
   const handleFieldSelect = (e) => {
@@ -100,7 +106,7 @@ export default function WeatherForecast() {
               {selectedField ? `${selectedField.lat}, ${selectedField.lon}` : ''}
             </span>
             {!needsOnboarding && (
-              <button className="btn btn-primary" onClick={() => runAnalysis()} disabled={loading} style={{ padding: '5px 14px', fontSize: 11 }}>
+              <button className="btn btn-primary" onClick={() => fetchFromAPI()} disabled={loading} style={{ padding: '5px 14px', fontSize: 11 }}>
                 {loading ? 'Refreshing...' : 'Refresh'}
               </button>
             )}

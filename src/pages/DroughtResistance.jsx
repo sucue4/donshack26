@@ -4,6 +4,7 @@ import MetricCard from '../components/MetricCard';
 import { GradeBadge, RiskBadge, ScoreBar, RecommendationList, DataTable } from '../components/YieldWidgets';
 import { getFields } from '../fieldStore';
 import { getProfile, isOnboarded } from '../farmProfileStore';
+import { getCachedCategory } from '../analysisStore';
 
 function buildRequestBody(field, profile) {
   return {
@@ -83,9 +84,13 @@ export default function DroughtResistance() {
   };
 
   useEffect(() => {
-    if (selectedField && isOnboarded(selectedField.id)) {
-      runAnalysis(selectedField);
+    if (!selectedField || !isOnboarded(selectedField.id)) return;
+    const cached = getCachedCategory(selectedField.id, 'drought');
+    if (cached) {
+      setAnalysis(cached);
+      return;
     }
+    runAnalysis(selectedField);
   }, [selectedField?.id]);
 
   const handleFieldSelect = (e) => {

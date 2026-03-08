@@ -4,6 +4,7 @@ import MetricCard from '../components/MetricCard';
 import { GradeBadge, RiskBadge, ScoreBar, RecommendationList, DataTable } from '../components/YieldWidgets';
 import { getFields } from '../fieldStore';
 import { getProfile, isOnboarded } from '../farmProfileStore';
+import { getCachedCategory } from '../analysisStore';
 
 function buildRequestBody(field, profile) {
   return {
@@ -71,9 +72,13 @@ export default function MonocultureRisk() {
   };
 
   useEffect(() => {
-    if (selectedField && isOnboarded(selectedField.id)) {
-      runAnalysis(selectedField);
+    if (!selectedField || !isOnboarded(selectedField.id)) return;
+    const cached = getCachedCategory(selectedField.id, 'monoculture');
+    if (cached) {
+      setAnalysis(cached);
+      return;
     }
+    runAnalysis(selectedField);
   }, [selectedField?.id]);
 
   const handleFieldSelect = (e) => {
@@ -194,7 +199,7 @@ export default function MonocultureRisk() {
                       <span key={r.region} style={{ fontWeight: 600, color: r.crop_percentage > 60 ? 'var(--status-danger)' : 'var(--status-good)' }}>
                         {r.crop_percentage}%
                       </span>,
-                      r.acreage.toLocaleString(),
+                      r.acreage ? r.acreage.toLocaleString() : '—',
                     ])}
                   />
                 </HudPanel>
