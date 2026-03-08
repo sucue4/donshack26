@@ -63,6 +63,7 @@ export default function Onboarding() {
   const layerRef = useRef(null);
   const drawnLayersRef = useRef(null);
   const fieldPolygonsRef = useRef({});
+  const prefetchTimerRef = useRef(null);
 
   // Fetch reference data
   useEffect(() => {
@@ -243,6 +244,38 @@ export default function Onboarding() {
       prev.includes(name) ? prev.filter((f) => f !== name) : [...prev, name]
     );
   };
+
+  // Pre-generate analysis as soon as crops + fertilizer step is reached,
+  // so Dashboard results appear instant when the user clicks "Run Yield Analysis".
+  useEffect(() => {
+    if (step !== 3 || !selectedField) return;
+
+    if (prefetchTimerRef.current) clearTimeout(prefetchTimerRef.current);
+
+    prefetchTimerRef.current = setTimeout(() => {
+      const promise = fetch('/api/analysis/full', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          field_id: selectedField.id,
+          crop_zones: cropZones.map((z) => ({
+            zone_name: z.zone_name,
+            crops_by_year: z.crops_by_year,
+          })),
+          fertilizers_used: selectedFertilizers,
+          lat: selectedField.lat,
+          lon: selectedField.lon,
+        }),
+      }).then((r) => {
+        if (!r.ok) return r.json().then((e) => Promise.reject(e?.detail || `HTTP ${r.status}`));
+        return r.json();
+      });
+
+      window.__ohdeereAnalysis = { promise, fieldId: selectedField.id };
+    }, 800);
+
+    return () => clearTimeout(prefetchTimerRef.current);
+  }, [step, selectedFertilizers]);
 
   const handleFinish = async () => {
     if (!selectedField) return;
