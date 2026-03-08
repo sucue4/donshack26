@@ -5,6 +5,7 @@ Orchestrates data collection from Open-Meteo and SoilGrids, then delegates
 to the AI yield analyzer for structured analysis.
 """
 
+import asyncio
 import logging
 
 from fastapi import APIRouter, HTTPException
@@ -22,21 +23,28 @@ router = APIRouter()
 # ---------------------------------------------------------------------------
 
 async def _fetch_external_data(profile: FarmProfile) -> tuple[dict | None, dict | None]:
-    """Fetch weather and soil data, returning None for each on failure."""
-    weather_data = None
-    soil_data = None
+    """Fetch weather and soil data in parallel with 4-second hard cap per source."""
+    async def safe_weather():
+        try:
+            return await asyncio.wait_for(
+                open_meteo.get_forecast(profile.lat, profile.lon, days=7),
+                timeout=4.0,
+            )
+        except Exception as exc:
+            logger.warning("Weather data unavailable: %s", exc)
+            return None
 
-    try:
-        weather_data = await open_meteo.get_forecast(profile.lat, profile.lon, days=7)
-    except Exception as exc:
-        logger.warning("Weather data unavailable: %s", exc)
+    async def safe_soil():
+        try:
+            return await asyncio.wait_for(
+                soilgrids.get_soil_properties(profile.lat, profile.lon),
+                timeout=4.0,
+            )
+        except Exception as exc:
+            logger.warning("Soil data unavailable: %s", exc)
+            return None
 
-    try:
-        soil_data = await soilgrids.get_soil_properties(profile.lat, profile.lon)
-    except Exception as exc:
-        logger.warning("Soil data unavailable: %s", exc)
-
-    return weather_data, soil_data
+    return await asyncio.gather(safe_weather(), safe_soil())
 
 
 async def _run_full_analysis(profile: FarmProfile) -> YieldAnalysis:

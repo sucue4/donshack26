@@ -27,9 +27,9 @@ export default function Dashboard() {
     return () => window.removeEventListener('ohdeere-fields-changed', loadFields);
   }, []);
 
-  const runAnalysis = async () => {
-    if (!selectedField) return;
-    const profile = getProfile(selectedField.id);
+  const fetchAnalysis = async (field) => {
+    if (!field) return;
+    const profile = getProfile(field.id);
     if (!profile) return;
 
     setLoading(true);
@@ -40,14 +40,14 @@ export default function Dashboard() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          field_id: selectedField.id,
+          field_id: field.id,
           crop_zones: (profile.cropZones || []).map((z) => ({
             zone_name: z.zone_name,
             crops_by_year: z.crops_by_year,
           })),
           fertilizers_used: profile.fertilizers || [],
-          lat: selectedField.lat,
-          lon: selectedField.lon,
+          lat: field.lat,
+          lon: field.lon,
         }),
       });
       if (!res.ok) {
@@ -62,6 +62,26 @@ export default function Dashboard() {
 
     setLoading(false);
   };
+
+  // Auto-run analysis when field is ready (use prefetch if available)
+  useEffect(() => {
+    if (!selectedField || !isOnboarded(selectedField.id)) return;
+
+    const prefetch = window.__ohdeereAnalysis;
+    if (prefetch && String(prefetch.fieldId) === String(selectedField.id)) {
+      window.__ohdeereAnalysis = null;
+      setLoading(true);
+      setError(null);
+      prefetch.promise
+        .then((data) => setAnalysis(data))
+        .catch((e) => setError(typeof e === 'string' ? e : (e?.message || 'Analysis failed')))
+        .finally(() => setLoading(false));
+    } else {
+      fetchAnalysis(selectedField);
+    }
+  }, [selectedField?.id]);
+
+  const runAnalysis = () => fetchAnalysis(selectedField);
 
   const handleFieldSelect = (e) => {
     const field = fields.find((f) => f.id === Number(e.target.value) || f.id === e.target.value);
@@ -140,7 +160,7 @@ export default function Dashboard() {
                 <MetricCard
                   label="Overall Grade"
                   value={analysis ? analysis.overall_grade : '--'}
-                  change={analysis ? 'AI-powered assessment' : 'Run analysis'}
+                  change={analysis ? 'Data-driven assessment' : 'Run analysis'}
                   changeType="neutral"
                 />
               </div>
@@ -230,7 +250,7 @@ export default function Dashboard() {
                 <div style={{ textAlign: 'center', padding: 32, color: 'var(--text-dim)' }}>
                   <div style={{ fontSize: 14, marginBottom: 8 }}>Ready to analyze</div>
                   <div style={{ fontSize: 12 }}>
-                    Click "Run Yield Analysis" to get AI-powered grades and recommendations across all 5 categories.
+                    Click "Run Yield Analysis" to get grades and recommendations across all 5 categories.
                   </div>
                 </div>
               )}

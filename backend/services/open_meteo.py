@@ -36,7 +36,7 @@ async def get_forecast(lat: float, lon: float, days: int = 7) -> dict:
         "forecast_days": days,
     }
     try:
-        async with httpx.AsyncClient(timeout=15.0) as client:
+        async with httpx.AsyncClient(timeout=6.0) as client:
             resp = await client.get(OPEN_METEO_FORECAST, params=params)
             resp.raise_for_status()
             data = resp.json()
@@ -65,7 +65,7 @@ async def get_historical(lat: float, lon: float, start_date: str, end_date: str)
         "timezone": "auto",
     }
     try:
-        async with httpx.AsyncClient(timeout=15.0) as client:
+        async with httpx.AsyncClient(timeout=6.0) as client:
             resp = await client.get(OPEN_METEO_HISTORICAL, params=params)
             resp.raise_for_status()
             data = resp.json()
@@ -95,7 +95,7 @@ async def get_water_balance(lat: float, lon: float, days: int = 7) -> dict:
         "past_days": 7,
     }
     try:
-        async with httpx.AsyncClient(timeout=15.0) as client:
+        async with httpx.AsyncClient(timeout=6.0) as client:
             resp = await client.get(OPEN_METEO_FORECAST, params=params)
             resp.raise_for_status()
             data = resp.json()
@@ -168,7 +168,7 @@ async def get_gdd(lat: float, lon: float, start_date: str, end_date: str, base_t
         "temperature_unit": "fahrenheit",
     }
     try:
-        async with httpx.AsyncClient(timeout=15.0) as client:
+        async with httpx.AsyncClient(timeout=6.0) as client:
             resp = await client.get(OPEN_METEO_HISTORICAL, params=params)
             resp.raise_for_status()
             data = resp.json()

@@ -54,9 +54,10 @@ export default function DroughtResistance() {
     return () => window.removeEventListener('ohdeere-fields-changed', loadFields);
   }, []);
 
-  const runAnalysis = async () => {
-    if (!selectedField) return;
-    const profile = getProfile(selectedField.id);
+  const runAnalysis = async (field) => {
+    const f = field || selectedField;
+    if (!f) return;
+    const profile = getProfile(f.id);
     if (!profile) return;
 
     setLoading(true);
@@ -66,7 +67,7 @@ export default function DroughtResistance() {
       const res = await fetch('/api/analysis/drought', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(buildRequestBody(selectedField, profile)),
+        body: JSON.stringify(buildRequestBody(f, profile)),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -80,6 +81,12 @@ export default function DroughtResistance() {
 
     setLoading(false);
   };
+
+  useEffect(() => {
+    if (selectedField && isOnboarded(selectedField.id)) {
+      runAnalysis(selectedField);
+    }
+  }, [selectedField?.id]);
 
   const handleFieldSelect = (e) => {
     const field = fields.find((f) => f.id === Number(e.target.value) || f.id === e.target.value);
@@ -111,8 +118,8 @@ export default function DroughtResistance() {
               {selectedField ? `${selectedField.lat}, ${selectedField.lon}` : ''}
             </span>
             {!needsOnboarding && (
-              <button className="btn btn-primary" onClick={runAnalysis} disabled={loading} style={{ padding: '5px 14px', fontSize: 11 }}>
-                {loading ? 'Analyzing...' : 'Run Analysis'}
+              <button className="btn btn-primary" onClick={() => runAnalysis()} disabled={loading} style={{ padding: '5px 14px', fontSize: 11 }}>
+                {loading ? 'Refreshing...' : 'Refresh'}
               </button>
             )}
           </div>

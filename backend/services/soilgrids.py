@@ -29,7 +29,7 @@ async def get_soil_properties(lat: float, lon: float) -> dict:
         "value": "mean",
     }
     try:
-        async with httpx.AsyncClient(timeout=20.0) as client:
+        async with httpx.AsyncClient(timeout=6.0) as client:
             resp = await client.get(SOILGRIDS_ENDPOINT, params=params)
             resp.raise_for_status()
             raw = resp.json()
