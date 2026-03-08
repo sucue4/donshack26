@@ -1,8 +1,6 @@
 # 🌾 Oh Deere! — Precision Agriculture Intelligence Platform
 
-A fully functional, open-source precision agriculture platform built on **free satellite imagery, open weather APIs, and public soil databases**. Delivers field-level crop health monitoring, weather-informed recommendations, and AI-powered agronomic insights—no expensive hardware or commercial subscriptions required.
-
-**Built in a hackathon weekend. Works with public data. Actually useful for farmers.**
+A fully functional, precision agriculture platform built on **free satellite imagery, open weather APIs, and public soil databases**. Delivers field-level crop health monitoring, weather-informed recommendations, and AI-powered agronomic insights—no expensive hardware or commercial subscriptions required.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 ![Node 18+](https://img.shields.io/badge/Node-18%2B-brightgreen)
