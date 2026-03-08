@@ -373,7 +373,7 @@ Built as part of **DonsHack '26**, a hackathon focused on sustainable agricultur
 
 ---
 
-**Built with ❤️ for farmers who can't afford $250/year platforms but deserve precision agriculture.**
+**Built with ❤️ for farmers who can't afford $5,995/year platforms but deserve precision agriculture.**
 
 ---
 
